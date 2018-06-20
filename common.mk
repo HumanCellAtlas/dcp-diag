@@ -2,18 +2,15 @@
 
 SHELL=/bin/bash -eo pipefail
 
-check_python_version:
-	@python --version 2>&1 | grep -q 3.6 || echo "Please run release commands using Python 3.6" && exit 1
-
-release_major: check_python_version
+release_major:
 	$(eval export TAG=$(shell git describe --tags --match 'v*.*.*' | perl -ne '/^v(\d)+\.(\d)+\.(\d+)+/; print "v@{[$$1+1]}.0.0"'))
 	$(MAKE) release
 
-release_minor: check_python_version
+release_minor:
 	$(eval export TAG=$(shell git describe --tags --match 'v*.*.*' | perl -ne '/^v(\d)+\.(\d)+\.(\d+)+/; print "v$$1.@{[$$2+1]}.0"'))
 	$(MAKE) release
 
-release_patch: check_python_version
+release_patch:
 	$(eval export TAG=$(shell git describe --tags --match 'v*.*.*' | perl -ne '/^v(\d)+\.(\d)+\.(\d+)+/; print "v$$1.$$2.@{[$$3+1]}"'))
 	$(MAKE) release
 
@@ -48,4 +45,4 @@ undo:
 	git reset --hard HEAD^
 	git push -f
 
-.PHONY: release check_python_version
+.PHONY: release

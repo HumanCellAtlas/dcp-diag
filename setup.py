@@ -1,3 +1,4 @@
+import glob
 import os
 from setuptools import setup, find_packages
 
@@ -11,6 +12,7 @@ setup(name='dcp-diag',
       author_email='spierson@chanzuckerberg.com',
       license='MIT',
       packages=find_packages(exclude=['tests']),
+      scripts=glob.glob('scripts/*'),
       zip_safe=False,
       install_requires=install_requires,
       platforms=['MacOS X', 'Posix'],

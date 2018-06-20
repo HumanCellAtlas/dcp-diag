@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import re
+import sys
+
+if __name__ == '__main__':  # noqa
+    pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
+    sys.path.insert(0, pkg_root)  # noqa
+
+from dcp_diag.finders import IngestFinder
+
+
+class DcpDig:
+
+    def __init__(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-d', '--deployment', help="search this deployment")
+        parser.add_argument('component', metavar="@component")
+        parser.add_argument('expression', type=self._expression_argument)
+        args = parser.parse_args()
+
+        self.deployment = self._choose_deployment(args)
+        print(f"Using deployment {self.deployment}")
+
+        if args.component.startswith('@'):
+            args.component = args.component[1:]
+
+        if args.component == 'ingest':
+            finder = IngestFinder(deployment=self.deployment)
+            finder.find(args.expression)
+
+    def _choose_deployment(self, args):
+        if 'deployment' in args and args.deployment:
+            return args.deployment
+        elif 'DEPLOYMENT_STAGE' in os.environ:
+            deployment = os.environ['DEPLOYMENT_STAGE']
+            answer = input(f"Use deployment {deployment}? (y/n): ")
+            if answer is 'y':
+                return deployment
+            else:
+                exit(1)
+        else:
+            print("You must supply the --deployment argument or set environment variable DEPLOYMENT_STAGE")
+            sys.exit(1)
+
+    @staticmethod
+    def _expression_argument(v):
+        regex = r"\w+=\w+"
+        if re.match(regex, v):
+            return v
+        else:
+            raise argparse.ArgumentTypeError(f"must be of the format x=y")
+
+
+DcpDig()

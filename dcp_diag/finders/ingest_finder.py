@@ -19,6 +19,8 @@ class IngestFinder:
 
         if field_name == 'submission_uuid':
             return self.find_submission_uuid(subm_uuid=field_value)
+        elif field_name == 'bundle_uuid':
+            return self.find_bundle_uuid(bundle_uuid=field_value)
         else:
             print(f"Sorry I don't know how to find a {field_name}")
             exit(1)
@@ -34,3 +36,16 @@ class IngestFinder:
             if subm.uuid == subm_uuid:
                 print(f"\nSubmission {subm.envelope_id} has UUID {subm_uuid}")
                 break
+
+    def find_bundle_uuid(self, bundle_uuid):
+        print(f"Searching for submission with Bundle {bundle_uuid}...")
+        count = 0
+        for subm in self.ingest.iter_submissions():
+            count += 1
+            sys.stdout.write(f"\rSearched {count} submissions...")
+            sys.stdout.flush()
+
+            for subm_bundle_uuid in subm.bundles():
+                if subm_bundle_uuid == bundle_uuid:
+                    print(f"\nBundle {bundle_uuid} is in the manifest for submission {subm.envelope_id}")
+                    exit(0)

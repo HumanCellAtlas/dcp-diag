@@ -1,3 +1,6 @@
+import json
+from urllib.parse import urlencode
+
 import requests
 
 from .ingest_auth_agent import IngestAuthAgent
@@ -17,7 +20,7 @@ class IngestApiAgent:
         return IngestApiAgent.SubmissionEnvelope(envelope_id=submission_id, ingest_api_agent=self)
 
     def iter_submissions(self):
-        for page in self.iter_pages('/submissionEnvelopes', page_size=500):
+        for page in self.iter_pages('/submissionEnvelopes', page_size=500, sort='submissionDate,desc'):
             for submission_data in page['submissionEnvelopes']:
                 yield IngestApiAgent.SubmissionEnvelope(data=submission_data, ingest_api_agent=self)
 
@@ -34,8 +37,11 @@ class IngestApiAgent:
     """
     Iterate through a collection using HATEOAS pagination, yielding pages.
     """
-    def iter_pages(self, path_or_url, page_size=100):
-        path_or_url += f"?size={page_size}"
+    def iter_pages(self, path_or_url, page_size=100, sort=None):
+        url_params = {'size': page_size}
+        if sort:
+            url_params['sort'] = sort
+        path_or_url += '?' + urlencode(url_params)
 
         while True:
             data = self.get(path_or_url)
@@ -71,6 +77,9 @@ class IngestApiAgent:
         else:
             return f"http://api.ingest.{self.deployment}.data.humancellatlas.org"
 
+    """
+    Model an Ingest Project entity
+    """
     class Project:
 
         def __init__(self, project_id, ingest_api_agent):
@@ -93,6 +102,9 @@ class IngestApiAgent:
         def _load(self):
             self.data = self.api.get(f"/projects/{self.project_id}")
 
+    """
+    Model an Ingest Submission Envelope entity
+    """
     class SubmissionEnvelope:
 
         # May be primed wih data, or of you supply an ID, we will go get the data
@@ -110,10 +122,10 @@ class IngestApiAgent:
                 self.envelope_id = data['_links']['self']['href'].split('/')[-1]
 
         def __str__(self):
-            return f"SubmissionEnvelope(id={self.envelope_id}, uuid={self.uuid}, status={self.status})"
+            return f"SubmissionEnvelope\n\tid={self.envelope_id}\n\tuuid={self.uuid}\n\tstatus={self.status}"
 
         def files(self):
-            return self.api.get_all(self.data['_links']['files']['href'], 'files')
+            return [IngestApiAgent.File(file_data) for file_data in self.api.get_all(self.data['_links']['files']['href'], 'files')]
 
         def iter_files(self):
             url = self.data['_links']['files']['href']
@@ -147,3 +159,27 @@ class IngestApiAgent:
 
         def _load(self):
             self.data = self.api.get(f"/submissionEnvelopes/{self.envelope_id}")
+
+    """
+    Model an Ingest File entity
+    """
+
+    class File:
+
+        def __init__(self, file_data):
+            self._data = file_data
+
+        def __str__(self):
+            return(f"\t\tfileName {self.name}\n" +
+                   f"\t\tcloudUrl {self.cloud_url}\n")
+
+        def __repr__(self):
+            return json.dumps(self._data, indent=2)
+
+        @property
+        def name(self):
+            return self._data['fileName']
+
+        @property
+        def cloud_url(self):
+            return self._data['cloudUrl']

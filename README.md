@@ -16,6 +16,10 @@ DCP to allow it to walk the object graph.
 
 ### Usage
 
+Usage: `dpdig @<component> <expression> --show <entities_to_show>`
+
+Examples:
+
 Find the submission relating to a DSS bundle UUID:
 
     dcpdig @ingest bundle_uuid=<x>
@@ -24,5 +28,11 @@ Find a (Mongo) submission ID given a submission UUID:
 
     dcpdig @ingest submission_uuid=<x>
 
-Not that submission may be abbreviated to "subm" or "sub", e.g.
+Note that submission may be abbreviated to "subm" or "sub", e.g.
 `subm_uuid=x`.
+
+Show files and bundles associated with an Ingest submission with Mongo ID `foo`:
+
+    `dcpdig @ingest subm_id=foo --show files,bundles`
+
+

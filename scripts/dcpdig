@@ -19,7 +19,11 @@ class DcpDig:
         parser.add_argument('-d', '--deployment', help="search this deployment")
         parser.add_argument('component', metavar="@component")
         parser.add_argument('expression', type=self._expression_argument)
+        parser.add_argument('-s', '--show', help='comma separated list of entities to show, e.g.: files,bundles')
+        parser.add_argument('-v', '--verbose', action='store_true', help="provide lots of detail in output")
+
         args = parser.parse_args()
+        self.verbose = args.verbose
 
         self.deployment = self._choose_deployment(args)
         print(f"Using deployment {self.deployment}")
@@ -29,7 +33,27 @@ class DcpDig:
 
         if args.component == 'ingest':
             finder = IngestFinder(deployment=self.deployment)
-            finder.find(args.expression)
+            submission = finder.find(args.expression)
+            print(submission)
+
+            entities_to_show = args.show.split(',')
+
+            if 'bundles' in entities_to_show:
+                if submission.status == 'Complete':
+                    print("\tBundles:")
+                    for bundle in submission.bundles():
+                        print(f"\t\t{bundle}")
+
+            if 'files' in entities_to_show:
+                    print("\tFiles:")
+                    for file in submission.files():
+                        self._output(file)
+
+    def _output(self, thing):
+        if self.verbose:
+            print("%r" % thing)
+        else:
+            print(thing)
 
     def _choose_deployment(self, args):
         if 'deployment' in args and args.deployment:

@@ -19,7 +19,8 @@ class DcpDig:
         parser.add_argument('-d', '--deployment', help="search this deployment")
         parser.add_argument('component', metavar="@component")
         parser.add_argument('expression', type=self._expression_argument)
-        parser.add_argument('-s', '--show', help='comma separated list of entities to show, e.g.: files,bundles')
+        parser.add_argument('-s', '--show', default='',
+                            help='comma separated list of entities to show, e.g.: files,bundles')
         parser.add_argument('-v', '--verbose', action='store_true', help="provide lots of detail in output")
 
         args = parser.parse_args()

@@ -1,3 +1,7 @@
+# Changes for v0.3.0 (2018-09-12)
+UX cleanup, add search for submission uuid
+Add dcpdig usage notes to README
+
 # Changes for v0.2.0 (2018-06-20)
 dcpdig @ingest bundle_uuid=x
 

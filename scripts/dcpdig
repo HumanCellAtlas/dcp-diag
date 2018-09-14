@@ -9,7 +9,7 @@ if __name__ == '__main__':  # noqa
     pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
     sys.path.insert(0, pkg_root)  # noqa
 
-from dcp_diag.finders import IngestFinder
+from dcp_diag.finders import Finder
 
 
 class DcpDig:
@@ -32,29 +32,12 @@ class DcpDig:
         if args.component.startswith('@'):
             args.component = args.component[1:]
 
-        if args.component == 'ingest':
-            finder = IngestFinder(deployment=self.deployment)
-            submission = finder.find(args.expression)
-            print(submission)
+        entities_to_show = args.show.split(',')
 
-            entities_to_show = args.show.split(',')
-
-            if 'bundles' in entities_to_show:
-                if submission.status == 'Complete':
-                    print("\tBundles:")
-                    for bundle in submission.bundles():
-                        print(f"\t\t{bundle}")
-
-            if 'files' in entities_to_show:
-                    print("\tFiles:")
-                    for file in submission.files():
-                        self._output(file)
-
-    def _output(self, thing):
-        if self.verbose:
-            print("%r" % thing)
-        else:
-            print(thing)
+        finder = Finder.factory(finder_name=args.component, deployment=self.deployment)
+        entity = finder.find(args.expression)
+        print(entity)
+        entity.show_associated(entities_to_show, verbose=args.verbose)
 
     def _choose_deployment(self, args):
         if 'deployment' in args and args.deployment:

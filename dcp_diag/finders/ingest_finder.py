@@ -2,9 +2,12 @@ import re
 import sys
 
 from ..api_agents import IngestApiAgent
+from .finder import Finder
 
 
 class IngestFinder:
+
+    name = "ingest"
 
     def __init__(self, deployment):
         self.ingest = IngestApiAgent(deployment=deployment)
@@ -54,3 +57,6 @@ class IngestFinder:
                 if subm_bundle_uuid == bundle_uuid:
                     print(f"\nBundle {bundle_uuid} is in the manifest for submission {subm.envelope_id}")
                     return subm
+
+
+Finder.register(IngestFinder)

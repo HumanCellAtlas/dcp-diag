@@ -1,3 +1,8 @@
+# Changes for v0.4.0 (2018-09-14)
+Refactor to make more extensible
+gitignore build and dist dirs
+fix error when no --show is supplied
+
 # Changes for v0.3.0 (2018-09-12)
 UX cleanup, add search for submission uuid
 Add dcpdig usage notes to README

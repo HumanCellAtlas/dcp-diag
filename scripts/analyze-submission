@@ -20,8 +20,8 @@ class AnalyzeSubmission:
     """
     # Start with Submission ID, then check:
     # ✔︎    Primary bundles (known by Ingest)
-    # todo  Primary bundles in DSS/AWS (direct access)
-    # todo  Primary bundles in DSS/GCP (direct access)
+    # ✔︎    Primary bundles in DSS/AWS (direct access)
+    # ✔︎    Primary bundles in DSS/GCP (direct access)
     # todo  Primary bundles searchable in DSS/AWS using Project ID
     # todo  Primary bundles searchable in DSS/GCP using Project ID
     # ✔    Secondary bundles searchable in DSS/AWS using files.analysis_process_json.input_bundles
@@ -51,6 +51,7 @@ class AnalyzeSubmission:
         print(f"Project UUID: {project.uuid}")
 
         self._get_primary_bundle_list_from_ingest(subm)
+        self._check_bundles_are_in_DSS()
         self._search_for_secondary_bundles()
 
     def _choose_deployment(self, args):
@@ -85,6 +86,43 @@ class AnalyzeSubmission:
             for bundle_uuid in sorted(self.bundle_data_map.keys()):
                 print(f"\t{bundle_uuid}")
 
+    def _check_bundles_are_in_DSS(self):
+        output("Checking bundles are in DSS")
+        pool = ThreadPool(10)
+        for bundle_uuid in self.bundle_data_map.keys():
+            self.bundle_data_map[bundle_uuid]['dss_presence'] = {}
+            for replica in ['aws', 'gcp']:
+                pool.add_task(self._check_bundle_mainifest_exists, bundle_uuid, replica)
+        pool.wait_for_completion()
+        output("done.\n")
+
+        for replica in ['aws', 'gcp']:
+            bundle_replica_presence = {k: v['dss_presence'][replica] for (k, v) in self.bundle_data_map.items()}
+            present_bundles = [k for (k, v) in bundle_replica_presence.items() if v]
+            absent_bundles = [k for (k, v) in bundle_replica_presence.items() if not v]
+            print(f"{len(present_bundles)} bundle are present in {replica.upper()}")
+            if len(present_bundles) > 0:
+                if self.verbose:
+                    for uuid in present_bundles:
+                        print(f"\t{uuid}")
+            if len(absent_bundles) > 0:
+                print(f"{len(absent_bundles)} bundle is absent from {replica.upper()}")
+                for uuid in absent_bundles:
+                    print(f"\t{uuid}")
+
+    def _check_bundle_mainifest_exists(self, bundle_uuid, replica):
+        dss = DataStoreAgent(self.deployment)
+        try:
+            dss.bundle_manifest(bundle_uuid, replica)
+            self.map_mutex.acquire()
+            self.bundle_data_map[bundle_uuid]['dss_presence'][replica] = True
+        except AssertionError as e:
+            self.map_mutex.acquire()
+            self.bundle_data_map[bundle_uuid]['dss_presence'][replica] = False
+        finally:
+            self.map_mutex.release()
+        output(".")
+
     def _search_for_secondary_bundles(self):
         output("Searching for secondary bundles...")
         pool = ThreadPool(10)
@@ -115,8 +153,6 @@ class AnalyzeSubmission:
                 for result in results:
                     results_bundle_uuid = result['bundle_fqid'].split('.')[0]
                     self.bundle_data_map[pri_uuid]['results_bundles'][replica].append(results_bundle_uuid)
-            except Exception as e:
-                print(e)
             finally:
                 self.map_mutex.release()
 

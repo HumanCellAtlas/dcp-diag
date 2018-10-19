@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import os
+import sys
+
+if __name__ == '__main__':  # noqa
+    pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
+    sys.path.insert(0, pkg_root)  # noqa
+
+from dcp_diag.finders import Finder
+from dcp_diag.api_agents import DataStoreAgent
+from hca.util.pool import ThreadPool
+from threading import Thread, Lock
+
+
+class AnalyzeSubmission:
+
+    """
+    # Start with Submission ID, then check:
+    # ✔︎    Primary bundles (known by Ingest)
+    # todo  Primary bundles in DSS/AWS (direct access)
+    # todo  Primary bundles in DSS/GCP (direct access)
+    # todo  Primary bundles searchable in DSS/AWS using Project ID
+    # todo  Primary bundles searchable in DSS/GCP using Project ID
+    # ✔    Secondary bundles searchable in DSS/AWS using files.analysis_process_json.input_bundles
+    # ✔    Secondary bundles searchable in DSS/GCP using files.analysis_process_json.input_bundles
+
+    # Cache results so we can reload and update later?
+    """
+
+    def __init__(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-d', '--deployment', help="search this deployment")
+        parser.add_argument('submission_id')
+        parser.add_argument('-v', '--verbose', action='store_true', help="provide lots of detail in output")
+
+        args = parser.parse_args()
+        self.verbose = args.verbose
+
+        self.deployment = self._choose_deployment(args)
+        print(f"Using deployment: {self.deployment}")
+
+        self.bundle_data_map = {}
+        self.map_mutex = Lock()
+
+        subm = self._retreive_submission(args.submission_id)
+
+        project = subm.project()
+        print(f"Project UUID: {project.uuid}")
+
+        self._get_primary_bundle_list_from_ingest(subm)
+        self._search_for_secondary_bundles()
+
+    def _choose_deployment(self, args):
+        if 'deployment' in args and args.deployment:
+            return args.deployment
+        elif 'DEPLOYMENT_STAGE' in os.environ:
+            deployment = os.environ['DEPLOYMENT_STAGE']
+            answer = input(f"Use deployment {deployment}? (y/n): ")
+            if answer is 'y':
+                return deployment
+            else:
+                exit(1)
+        else:
+            print("You must supply the --deployment argument or set environment variable DEPLOYMENT_STAGE")
+            sys.exit(1)
+
+    def _retreive_submission(self, submission_id):
+        output("Retreiving submission...")
+        finder = Finder.factory(finder_name="ingest", deployment=self.deployment)
+        submission = finder.find(f"subm_id={submission_id}")
+        output(str(submission), newline_after=True)
+        return submission
+
+    def _get_primary_bundle_list_from_ingest(self, subm):
+        output("Retrieving submission's primary bundle list...")
+
+        for pri_uuid in subm.bundles():
+            self.bundle_data_map[pri_uuid] = {}
+
+        output(f"Ingest created {len(self.bundle_data_map)} bundles.\n")
+        if self.verbose:
+            for bundle_uuid in sorted(self.bundle_data_map.keys()):
+                print(f"\t{bundle_uuid}")
+
+    def _search_for_secondary_bundles(self):
+        output("Searching for secondary bundles...")
+        pool = ThreadPool(10)
+        for pri_uuid in self.bundle_data_map.keys():
+            self.bundle_data_map[pri_uuid]['results_bundles'] = {}
+            for replica in ['aws', 'gcp']:
+                self.bundle_data_map[pri_uuid]['results_bundles'][replica] = []
+                pool.add_task(self._find_secondary_bundles_for_primary_bundle, pri_uuid, replica)
+        pool.wait_for_completion()
+        output("...done.\n")
+        self._print_secondary_results_bundles_results('aws')
+        self._print_secondary_results_bundles_results('gcp')
+
+    def _find_secondary_bundles_for_primary_bundle(self, pri_uuid, replica):
+        dss = DataStoreAgent(self.deployment)
+        query = {
+            "query": {
+                "match": {
+                    "files.analysis_process_json.input_bundles": pri_uuid
+                }
+            }
+        }
+        results = dss.search(query, replica=replica)
+        output(f"{len(results)}")
+        if len(results) > 0:
+            self.map_mutex.acquire()
+            try:
+                for result in results:
+                    results_bundle_uuid = result['bundle_fqid'].split('.')[0]
+                    self.bundle_data_map[pri_uuid]['results_bundles'][replica].append(results_bundle_uuid)
+            except Exception as e:
+                print(e)
+            finally:
+                self.map_mutex.release()
+
+    def _print_secondary_results_bundles_results(self, replica):
+        replica_results = {k: v['results_bundles'][replica] for (k, v) in self.bundle_data_map.items()}
+
+        i = 0
+        while len(replica_results) > 0:
+            pri_sec = {k: v for (k, v) in replica_results.items() if len(v) == i}
+            count = len(pri_sec)
+            if count > 0:
+                print(f"In {replica.upper()} there are {count} primary bundles with {i} results bundles")
+                if self.verbose or i != 1:
+                    for pri, sec in pri_sec.items():
+                        print(f"\tprimary: {pri} secondary: {sec}")
+
+            for key in pri_sec.keys():
+                del replica_results[key]
+
+            i += 1
+
+
+def output(message, newline_before=False, newline_after=False):
+    if newline_before:
+        sys.stdout.write("\n")
+    sys.stdout.write(message)
+    if newline_after:
+        sys.stdout.write("\n")
+    sys.stdout.flush()
+
+
+AnalyzeSubmission()

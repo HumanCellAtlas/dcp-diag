@@ -6,25 +6,49 @@ class Project:
     Model an Ingest Project entity
     """
 
-    def __init__(self, project_id, ingest_api_agent):
-        self.project_id = project_id
+    @classmethod
+    def load_by_id(cls, project_id, ingest_api_agent):
+        data = ingest_api_agent.get(f"/projects/{project_id}")
+        return Project(project_data=data, ingest_api_agent=ingest_api_agent)
+
+    @classmethod
+    def load_by_uuid(cls, project_uuid, ingest_api_agent):
+        data = ingest_api_agent.get(f"/projects/search/findByUuid?uuid={project_uuid}")
+        return Project(project_data=data, ingest_api_agent=ingest_api_agent)
+
+    def __init__(self, project_data=None, ingest_api_agent=None):
         self.api = ingest_api_agent
-        self.data = None
-        self._load()
+        self.data = project_data
+
+    def __str__(self, prefix=""):
+        return f"{prefix}Project\n" \
+               f"{prefix}\tid={self.id}\n" \
+               f"{prefix}\tuuid={self.uuid}\n" \
+               f"{prefix}\tshort_name={self.short_name}"
+
+    @property
+    def id(self):
+        return self.data['_links']['self']['href'].split('/')[-1]
 
     @property
     def uuid(self):
-        return self.data['uuid']
+        return self.data['uuid']['uuid']
+
+    @property
+    def short_name(self):
+        return self.data['content']['project_core']['project_short_name']
+
+    def show_associated(self, entities_to_show, verbose=False):
+        if 'submissions' in entities_to_show:
+            for subm in self.submission_envelopes():
+                print(subm.__str__(prefix="\t"))
 
     def submission_envelopes(self):
         data = self.api.get(self.data['_links']['submissionEnvelopes']['href'])
         return [
-            SubmissionEnvelope(data=subm_data, ingest_api_agent=self.api)
+            SubmissionEnvelope(submission_data=subm_data, ingest_api_agent=self.api)
             for subm_data in data['_embedded']['submissionEnvelopes']
         ]
-
-    def _load(self):
-        self.data = self.api.get(f"/projects/{self.project_id}")
 
 
 class SubmissionEnvelope:
@@ -32,22 +56,27 @@ class SubmissionEnvelope:
     Model an Ingest Submission Envelope entity
     """
 
-    # May be primed wih data, or of you supply an ID, we will go get the data
+    @classmethod
+    def load_by_id(cls, submission_id, ingest_api_agent):
+        data = ingest_api_agent.get(f"/submissionEnvelopes/{submission_id}")
+        return SubmissionEnvelope(submission_data=data, ingest_api_agent=ingest_api_agent)
 
-    def __init__(self, ingest_api_agent, envelope_id=None, data=None):
-        if not envelope_id and not data:
-            raise RuntimeError("either envelope_id or data must be provided")
+    @classmethod
+    def iter_submissions(cls, ingest_api_agent):
+        for page in ingest_api_agent.iter_pages('/submissionEnvelopes', page_size=500, sort='submissionDate,desc'):
+            for submission_data in page['submissionEnvelopes']:
+                yield SubmissionEnvelope(submission_data=submission_data, ingest_api_agent=ingest_api_agent)
+
+    def __init__(self, submission_data, ingest_api_agent):
+        self.data = submission_data
         self.api = ingest_api_agent
-        self.data = None
-        if envelope_id:
-            self.envelope_id = envelope_id
-            self._load()
-        else:
-            self.data = data
-            self.envelope_id = data['_links']['self']['href'].split('/')[-1]
+        self.envelope_id = self.data['_links']['self']['href'].split('/')[-1]
 
-    def __str__(self):
-        return f"SubmissionEnvelope\n\tid={self.envelope_id}\n\tuuid={self.uuid}\n\tstatus={self.status}"
+    def __str__(self, prefix=""):
+        return f"{prefix}SubmissionEnvelope\n" \
+               f"{prefix}\tid={self.envelope_id}\n" \
+               f"{prefix}\tuuid={self.uuid}\n" \
+               f"{prefix}\tstatus={self.status}"
 
     def show_associated(self, entities_to_show, verbose=False):
         self.verbose = verbose
@@ -78,9 +107,16 @@ class SubmissionEnvelope:
             for file in page['files']:
                 yield file
 
-    def reload(self):
-        self._load()
-        return self
+    def projects(self):
+        return [Project(project_data=proj_data, ingest_api_agent=self.api) for proj_data in
+                self.api.get_all(self.data['_links']['projects']['href'], 'projects')]
+
+    def project(self):
+        """ Assumes only one project """
+        projects = self.projects()
+        if len(projects) != 1:
+            raise RuntimeError(f"Expect 1 project got {len(projects)}")
+        return projects[0]
 
     @property
     def status(self):
@@ -101,9 +137,6 @@ class SubmissionEnvelope:
         url = self.data['_links']['bundleManifests']['href']
         manifests = self.api.get_all(url, 'bundleManifests')
         return [manifest['bundleUuid'] for manifest in manifests]
-
-    def _load(self):
-        self.data = self.api.get(f"/submissionEnvelopes/{self.envelope_id}")
 
 
 class File:

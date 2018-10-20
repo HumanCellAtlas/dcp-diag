@@ -1,5 +1,6 @@
 import json
 import os
+from urllib.parse import urlencode
 
 import requests
 
@@ -13,9 +14,29 @@ class DataStoreAgent:
         self.dss_url = self.DSS_API_URL_TEMPLATE.format(deployment=deployment)
 
     def search(self, query, replica='aws'):
-        url = f"{self.dss_url}/search?replica={replica}"
-        response = requests.post(url, json={"es_query": query})
-        return response.json()['results']
+        results = []
+        url = f"{self.dss_url}/search"
+        query_params = { 'replica': replica}
+        query_json = {'es_query': query}
+        for response in self.iter_pages(url, query_params=query_params, json_body=query_json):
+            results.extend(response['results'])
+        return results
+
+    def iter_pages(self, url, query_params={}, json_body={}, page_size=500):
+        params = query_params.copy()
+        params['per_page'] = page_size
+        full_url = url + '?' + urlencode(params)
+
+        while True:
+            response = requests.post(full_url, json=json_body)
+            yield response.json()
+
+            link_header = response.headers.get('link', None)
+            if link_header:
+                next_link = link_header.split(';')[0]
+                full_url = next_link.strip('<').strip('>')
+            else:
+                break
 
     def download_bundle(self, bundle_uuid, target_folder):
         print(f"Downloading bundle {bundle_uuid}:")

@@ -12,7 +12,7 @@ if __name__ == '__main__':  # noqa
 from dcp_diag.finders import Finder
 from dcp_diag.api_agents import DataStoreAgent
 from hca.util.pool import ThreadPool
-from threading import Thread, Lock
+from threading import Lock
 
 
 class AnalyzeSubmission:
@@ -37,9 +37,11 @@ class AnalyzeSubmission:
         parser.add_argument('-d', '--deployment', help="search this deployment")
         parser.add_argument('submission_id')
         parser.add_argument('-v', '--verbose', action='store_true', help="provide lots of detail in output")
+        parser.add_argument('-j', '--jobs', type=int, default=10, help="concurrently level to use (default: 10)")
 
         args = parser.parse_args()
         self.verbose = args.verbose
+        self.concurrency = args.jobs
 
         self.deployment = self._choose_deployment(args)
         print(f"Using deployment: {self.deployment}")
@@ -96,7 +98,7 @@ class AnalyzeSubmission:
 
     def _check_bundles_are_in_DSS(self):
         output("\nChecking bundles are in AWS & GCP DSS...")
-        pool = ThreadPool(20)
+        pool = ThreadPool(self.concurrency)
         for bundle_uuid in self.bundle_data_map.keys():
             self.bundle_data_map[bundle_uuid]['dss_presence'] = {}
             for replica in ['aws', 'gcp']:
@@ -189,7 +191,7 @@ class AnalyzeSubmission:
 
     def _search_for_secondary_bundles(self):
         output("\nSearching AWS & GCP DSS for secondary bundles...")
-        pool = ThreadPool(20)
+        pool = ThreadPool(self.concurrency)
         for pri_uuid in self.bundle_data_map.keys():
             self.bundle_data_map[pri_uuid]['results_bundles'] = {}
             for replica in ['aws', 'gcp']:

@@ -1,3 +1,9 @@
+# Changes for v0.5.0 (2018-10-19)
+scripts/dcpdig -d staging @ingest project_uuid=<uuid> --show submissions
+scripts/analyze-submission -d <deployment> <submission_id>
+  - checks bundle manifests are in AWS/GCP DSS
+  - searches DSS AWS & GCP for bundles by project_id
+
 # Changes for v0.4.0 (2018-09-14)
 Refactor to make more extensible
 gitignore build and dist dirs

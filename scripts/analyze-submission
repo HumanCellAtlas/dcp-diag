@@ -4,15 +4,16 @@ import argparse
 import json
 import os
 import sys
+from threading import Lock
 
 if __name__ == '__main__':  # noqa
     pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
     sys.path.insert(0, pkg_root)  # noqa
 
+from hca.util.pool import ThreadPool
+
 from dcp_diag.finders import Finder
 from dcp_diag.api_agents import DataStoreAgent
-from hca.util.pool import ThreadPool
-from threading import Lock
 
 
 class AnalyzeSubmission:
@@ -38,6 +39,8 @@ class AnalyzeSubmission:
         parser.add_argument('submission_id')
         parser.add_argument('-v', '--verbose', action='store_true', help="provide lots of detail in output")
         parser.add_argument('-j', '--jobs', type=int, default=10, help="concurrently level to use (default: 10)")
+        parser.add_argument('-s', '--save', action='store_true',
+                            help="save state in <submission_id>.json file for future use")
 
         args = parser.parse_args()
         self.verbose = args.verbose
@@ -58,6 +61,8 @@ class AnalyzeSubmission:
         self._check_bundles_are_in_DSS()
         self._search_dss_for_bundles_with_this_project_id(project.uuid)
         self._search_for_secondary_bundles()
+        if args.save:
+            self._save_state(filename=f"{args.submission_id}.json")
 
     def _choose_deployment(self, args):
         if 'deployment' in args and args.deployment:
@@ -239,6 +244,12 @@ class AnalyzeSubmission:
                 del replica_results[key]
 
             i += 1
+
+    def _save_state(self, filename):
+        output(f"\nSaving results in {filename}...")
+        with open(filename, 'w') as fp:
+            fp.write(json.dumps(self.bundle_data_map, indent=4))
+        output("done\n")
 
 
 def output(message, newline_before=False, newline_after=False):

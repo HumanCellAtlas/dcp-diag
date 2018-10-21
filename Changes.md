@@ -1,3 +1,9 @@
+# Changes for v0.6.0 (2018-10-21)
+analyze-submission:
+ - use --jobs to configure concurrency
+ - saves and reloads state automatically, use --clean to disable load
+ - verbosity: -v = bad news detail, -vv = good and bad news detail
+
 # Changes for v0.5.0 (2018-10-19)
 scripts/dcpdig -d staging @ingest project_uuid=<uuid> --show submissions
 scripts/analyze-submission -d <deployment> <submission_id>

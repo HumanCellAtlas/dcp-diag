@@ -15,6 +15,19 @@ from hca.util.pool import ThreadPool
 from dcp_diag.finders import Finder
 from dcp_diag.api_agents import DataStoreAgent
 
+V_SILENT = 0
+V_SUMMARY = 1
+V_BAD_DETAIL = 2
+V_GOOD_DETAIL = 3
+
+verbosity_level = V_SUMMARY
+
+
+def output(message, message_verbosity=V_SILENT):
+    if message_verbosity <= verbosity_level:
+        sys.stdout.write(message)
+        sys.stdout.flush()
+
 
 class AnalyzeSubmission:
 
@@ -48,17 +61,17 @@ class AnalyzeSubmission:
                 yield uuid
 
         def save(self, filename):
-            output(f"\tSaving state in {filename}...")
+            output(f"\tSaving state in {filename}...", V_SUMMARY)
             with open(filename, 'w') as fp:
                 fp.write(json.dumps(self.bundle_map, indent=4))
-            output("done\n")
+            output("done.\n", V_SUMMARY)
 
         def load(self, filename):
             if os.path.isfile(filename):
-                output(f"\tLoading state from {filename}...")
+                output(f"\tLoading state from {filename}...", V_SUMMARY)
                 with open(filename, 'r') as fp:
                     self.bundle_map = json.loads(fp.read())
-                output("done\n")
+                output("done\n", V_SUMMARY)
 
     class DSSBundlePresenceChecker:
 
@@ -71,7 +84,7 @@ class AnalyzeSubmission:
             self.checked_bundles = {'aws': 0, 'gcp': 0}
 
         def check(self):
-            output("\tChecking for bundle manifests:")
+            output("\tChecking for bundle manifests:", V_SUMMARY)
             pool = ThreadPool(self.options.jobs)
             for bundle_uuid in self.state.iter_primary_bundles():
                 for replica in ['aws', 'gcp']:
@@ -83,7 +96,7 @@ class AnalyzeSubmission:
                         replica_data['dss_presence'] = {}
                     pool.add_task(self._check_bundle_manifest_exists, bundle_uuid, replica)
             pool.wait_for_completion()
-            print("...done.")
+            output("...done.\n", V_SUMMARY)
 
         def _check_bundle_manifest_exists(self, bundle_uuid, replica):
             dss = DataStoreAgent(self.deployment)
@@ -94,7 +107,7 @@ class AnalyzeSubmission:
             except AssertionError as e:
                 with self.state.lock:
                     self.state.bundle_map[bundle_uuid][replica]['dss_presence'] = False
-                    print(f"\rbundle {bundle_uuid} is missing from {replica.upper()}")
+                    output(f"\rbundle {bundle_uuid} is missing from {replica.upper()}\n", V_BAD_DETAIL)
             self.checked_bundles[replica] += 1
             self._print_progress()
 
@@ -102,22 +115,21 @@ class AnalyzeSubmission:
             if sys.stdout.isatty():
                 output(f"\r\tChecking for bundle manifests: "
                        f"AWS: {self.checked_bundles['aws']}/{self.primary_bundle_count}"
-                       f" GCP: {self.checked_bundles['gcp']}/{self.primary_bundle_count}")
+                       f" GCP: {self.checked_bundles['gcp']}/{self.primary_bundle_count}", V_SUMMARY)
 
         def print_results(self):
             for replica in ['aws', 'gcp']:
                 bundle_replica_presence = {k: v[replica]['dss_presence'] for (k, v) in self.state.bundle_map.items()}
                 present_bundles = [k for (k, v) in bundle_replica_presence.items() if v]
                 absent_bundles = [k for (k, v) in bundle_replica_presence.items() if not v]
-                print(f"\t{len(present_bundles)} bundle are present in {replica.upper()}")
-                if len(present_bundles) > 0:
-                    if self.options.verbose:
+                output(f"\t{len(present_bundles)} bundle are present in {replica.upper()}\n", V_SUMMARY)
+                if len(present_bundles) > 0 and verbosity_level >= V_GOOD_DETAIL:
                         for uuid in present_bundles:
                             print(f"\t{uuid}")
-                if len(absent_bundles) > 0:
-                    print(f"\t{len(absent_bundles)} bundle is absent from {replica.upper()}")
-                    for uuid in absent_bundles:
-                        print(f"\t{uuid}")
+                if len(absent_bundles) > 0 and verbosity_level >= V_BAD_DETAIL:
+                        output(f"\t{len(absent_bundles)} bundle is absent from {replica.upper()}\n", V_SUMMARY)
+                        for uuid in absent_bundles:
+                            print(f"\t{uuid}")
 
     class SearchDSSbyProjectUUID:
 
@@ -129,7 +141,7 @@ class AnalyzeSubmission:
 
         def check(self):
             # TODO: consider the possibility the search returns MORE bundles than Ingest knows about
-            output("\tSearching DSS...")
+            output("\tSearching DSS...", V_SUMMARY)
             dss = DataStoreAgent(self.deployment)
             query = {
                 "query": {
@@ -160,7 +172,7 @@ class AnalyzeSubmission:
                         bundle_uuid = bundle_components[0]
                         # TODO if we don't know about this bundle at all, create a new entry in bundle_map
                         self.state.bundle_map[bundle_uuid][replica]['in_dss_project_search'] = True
-            output("done.\n")
+            output("done.\n", V_SUMMARY)
 
         def print_results(self):
             for replica in ['aws', 'gcp']:
@@ -172,9 +184,9 @@ class AnalyzeSubmission:
                 if v['type'] == 'primary'
                 and v[replica].get('in_dss_project_search')
             ]
-            print(f"\tIn {replica.upper()} DSS, "
-                  f"{len(primary_bundles_indexed_by_project)} bundles are indexed by project")
-            if self.options.verbose:
+            output(f"\tIn {replica.upper()} DSS, "
+                   f"{len(primary_bundles_indexed_by_project)} bundles are indexed by project\n", V_SUMMARY)
+            if verbosity_level >= V_GOOD_DETAIL:
                 for bundle_uuid in primary_bundles_indexed_by_project:
                     print(f"\t{bundle_uuid}")
 
@@ -184,11 +196,12 @@ class AnalyzeSubmission:
                 and not v[replica].get('in_dss_project_search')
             ]
             if len(primary_bundles_not_indexed_by_project) > 0:
-                print(
+                output(
                     f"\tIn {replica.upper()} DSS, "
-                    f"{len(primary_bundles_not_indexed_by_project)} bundles are NOT indexed by project")
-                for bundle_uuid in primary_bundles_not_indexed_by_project:
-                    print(f"\t{bundle_uuid}")
+                    f"{len(primary_bundles_not_indexed_by_project)} bundles are NOT indexed by project\n", V_SUMMARY)
+                if verbosity_level >= V_BAD_DETAIL:
+                    for bundle_uuid in primary_bundles_not_indexed_by_project:
+                        print(f"\t\t{bundle_uuid}")
 
     class SearchDSSforSecondaryBundles:
 
@@ -201,7 +214,7 @@ class AnalyzeSubmission:
             self.checked_bundles = {'aws': 0, 'gcp': 0}
 
         def check(self):
-            output("\tSearching for secondary bundles: ")
+            output("\tSearching for secondary bundles: ", V_SUMMARY)
             pool = ThreadPool(self.options.jobs)
             for pri_uuid in self.state.iter_primary_bundles():
                 for replica in ['aws', 'gcp']:
@@ -213,7 +226,7 @@ class AnalyzeSubmission:
                         replica_data['results_bundles'] = []
                     pool.add_task(self._find_secondary_bundles_for_primary_bundle, pri_uuid, replica)
             pool.wait_for_completion()
-            output("...done.\n")
+            output("...done.\n", V_SUMMARY)
 
         def _find_secondary_bundles_for_primary_bundle(self, pri_uuid, replica):
             dss = DataStoreAgent(self.deployment)
@@ -237,7 +250,7 @@ class AnalyzeSubmission:
             if sys.stdout.isatty():
                 output(f"\r\tSearching for secondary bundles: "
                        f"AWS: {self.checked_bundles['aws']}/{self.primary_bundle_count}"
-                       f" GCP: {self.checked_bundles['gcp']}/{self.primary_bundle_count}")
+                       f" GCP: {self.checked_bundles['gcp']}/{self.primary_bundle_count}", V_SUMMARY)
 
         def print_results(self):
             self._print_results_for_replica('aws')
@@ -251,8 +264,9 @@ class AnalyzeSubmission:
                 pri_sec = {k: v for (k, v) in replica_results.items() if len(v) == i}
                 count = len(pri_sec)
                 if count > 0:
-                    print(f"\tIn {replica.upper()} there are {count} primary bundles with {i} results bundles")
-                    if self.options.verbose or i != 1:
+                    output(f"\tIn {replica.upper()} there are {count} primary bundles with {i} results bundles\n",
+                           V_SUMMARY)
+                    if i == 0 and verbosity_level >= V_BAD_DETAIL or i >= 1 and verbosity_level >= V_GOOD_DETAIL:
                         for pri, sec in pri_sec.items():
                             print(f"\t\tprimary: {pri} secondary: {sec}")
 
@@ -265,46 +279,49 @@ class AnalyzeSubmission:
         parser = argparse.ArgumentParser()
         parser.add_argument('-d', '--deployment', help="search this deployment")
         parser.add_argument('submission_id')
-        parser.add_argument('-v', '--verbose', action='store_true', help="provide lots of detail in output")
-        parser.add_argument('-j', '--jobs', type=int, default=10, help="concurrently level to use (default: 10)")
+        parser.add_argument('-v', '--verbose', default=V_SUMMARY, action='count', dest='verbosity',
+                            help="provide more detail (can be added multiple times)")
+        parser.add_argument('-j', '--jobs', type=int, default=10,
+                            help="concurrently level to use (default: 10)")
         parser.add_argument('-f', '--fresh', action='store_true',
                             help="don't start with saved state (if present)")
 
         args = parser.parse_args()
-        self.verbose = args.verbose
+        global verbosity_level
+        verbosity_level = args.verbosity
         self.state = self.AnalysisState()
 
         self.deployment = self._choose_deployment(args)
         subm = self._retreive_submission(args.submission_id)
 
         project = subm.project()
-        print(f"\tProject UUID: {project.uuid}")
+        output(f"\tProject UUID: {project.uuid}\n", V_SUMMARY)
         state_filename = f"{args.submission_id}.json"
 
         if args.fresh:
-            print("\nPHASE 1: Get primary bundle list from Ingest:")
+            output("\nPHASE 1: Get primary bundle list from Ingest:\n", V_SUMMARY)
             self._get_primary_bundle_list_from_ingest(subm)
         else:
-            print("\nPHASE 1: Loading cached state:")
+            output("\nPHASE 1: Loading cached state:\n", V_SUMMARY)
             self.state.load(filename=state_filename)
 
-        print("\nPHASE 2: Checking bundles are present in DSS:")
+        output("\nPHASE 2: Checking bundles are present in DSS:\n", V_SUMMARY)
         checker2 = self.DSSBundlePresenceChecker(self.deployment, self.state, options=args)
         checker2.check()
         checker2.print_results()
 
-        print("\nPHASE 3: Check DSS for primary bundles with this project UUID:")
+        output("\nPHASE 3: Check DSS for primary bundles with this project UUID:\n", V_SUMMARY)
         checker3 = self.SearchDSSbyProjectUUID(project_uuid=project.uuid, deployment=self.deployment,
                                                state=self.state, options=args)
         checker3.check()
         checker3.print_results()
 
-        print("\nPHASE 4: Check DSS for secondary bundles:")
+        output("\nPHASE 4: Check DSS for secondary bundles:\n", V_SUMMARY)
         checker4 =self.SearchDSSforSecondaryBundles(deployment=self.deployment, state=self.state, options=args)
         checker4.check()
         checker4.print_results()
 
-        print(f"\nPHASE 6: Save state:")
+        output(f"\nPHASE 6: Save state:\n", V_SUMMARY)
         self.state.save(state_filename)
 
     def _choose_deployment(self, args):
@@ -318,19 +335,19 @@ class AnalyzeSubmission:
         else:
             print("You must supply the --deployment argument or set environment variable DEPLOYMENT_STAGE")
             sys.exit(1)
-        print(f"Using deployment: {deployment}")
+        output(f"Using deployment: {deployment}\n", V_SUMMARY)
         return deployment
 
     def _retreive_submission(self, submission_id):
-        output("\nRetreiving submission...")
+        output("\nRetreiving submission...", V_SUMMARY)
         finder = Finder.factory(finder_name="ingest", deployment=self.deployment)
         submission = finder.find(f"subm_id={submission_id}")
-        output("done.\n")
-        print(submission)
+        output("done.\n", V_SUMMARY)
+        output(str(submission), V_SUMMARY)
         return submission
 
     def _get_primary_bundle_list_from_ingest(self, subm):
-        output("\tRetrieving submission's primary bundle list...")
+        output("\tRetrieving submission's primary bundle list...", V_SUMMARY)
 
         for pri_uuid in subm.bundles():
             self.state.bundle_map[pri_uuid] = {
@@ -338,21 +355,12 @@ class AnalyzeSubmission:
                 'aws': {},
                 'gcp': {}
             }
-        output("done.\n")
+        output("done.\n", V_SUMMARY)
 
-        output(f"\tIngest created {len(self.state.bundle_map)} bundles.\n")
-        if self.verbose:
+        output(f"\tIngest created {len(self.state.bundle_map)} bundles.\n", V_SUMMARY)
+        if verbosity_level >= V_GOOD_DETAIL:
             for bundle_uuid in sorted(self.state.bundle_map.keys()):
                 print(f"\t{bundle_uuid}")
-
-
-def output(message, newline_before=False, newline_after=False):
-    if newline_before:
-        sys.stdout.write("\n")
-    sys.stdout.write(message)
-    if newline_after:
-        sys.stdout.write("\n")
-    sys.stdout.flush()
 
 
 AnalyzeSubmission()

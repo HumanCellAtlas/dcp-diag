@@ -39,10 +39,24 @@ class AnalyzeSubmission:
             self.bundle_map = {}
             self.lock = Lock()
 
+        @property
+        def primary_bundle_count(self):
+            return len([k for (k, v) in self.bundle_map.items() if v['type'] == 'primary'])
+
+        def iter_primary_bundles(self):
+            for uuid in [k for (k, v) in self.bundle_map.items() if v['type'] == 'primary']:
+                yield uuid
+
         def save(self, filename):
-            output(f"\nSaving results in {filename}...")
+            output(f"\nSaving state in {filename}...")
             with open(filename, 'w') as fp:
                 fp.write(json.dumps(self.bundle_map, indent=4))
+            output("done\n")
+
+        def load(self, filename):
+            output(f"\nLoading state from {filename}...")
+            with open(filename, 'r') as fp:
+                self.bundle_map = json.loads(fp.read())
             output("done\n")
 
     class DSSBundlePresenceChecker:
@@ -52,21 +66,23 @@ class AnalyzeSubmission:
             self.state = state
             self.options = options
 
-            self.primary_bundle_count = len([k for (k, v) in self.state.bundle_map.items() if v['type'] == 'primary'])
+            self.primary_bundle_count = self.state.primary_bundle_count
             self.checked_bundles = {'aws': 0, 'gcp': 0}
 
-            self.check_for_bundles()
-            self.print_results()
-
-        def check_for_bundles(self):
-            print("\nChecking bundles are in AWS & GCP DSS...")
+        def check(self):
+            output("\tChecking for bundle manifests:")
             pool = ThreadPool(self.options.jobs)
-            for bundle_uuid in self.state.bundle_map.keys():
-                self.state.bundle_map[bundle_uuid]['dss_presence'] = {}
+            for bundle_uuid in self.state.iter_primary_bundles():
                 for replica in ['aws', 'gcp']:
+                    replica_data = self.state.bundle_map[bundle_uuid][replica]
+                    if 'dss_presence' in replica_data:
+                        if replica_data['dss_presence']:
+                            continue
+                    else:
+                        replica_data['dss_presence'] = {}
                     pool.add_task(self._check_bundle_manifest_exists, bundle_uuid, replica)
             pool.wait_for_completion()
-            print("\ndone.")
+            print("...done.")
 
         def _check_bundle_manifest_exists(self, bundle_uuid, replica):
             dss = DataStoreAgent(self.deployment)
@@ -92,30 +108,27 @@ class AnalyzeSubmission:
                 bundle_replica_presence = {k: v[replica]['dss_presence'] for (k, v) in self.state.bundle_map.items()}
                 present_bundles = [k for (k, v) in bundle_replica_presence.items() if v]
                 absent_bundles = [k for (k, v) in bundle_replica_presence.items() if not v]
-                print(f"{len(present_bundles)} bundle are present in {replica.upper()}")
+                print(f"\t{len(present_bundles)} bundle are present in {replica.upper()}")
                 if len(present_bundles) > 0:
                     if self.options.verbose:
                         for uuid in present_bundles:
                             print(f"\t{uuid}")
                 if len(absent_bundles) > 0:
-                    print(f"{len(absent_bundles)} bundle is absent from {replica.upper()}")
+                    print(f"\t{len(absent_bundles)} bundle is absent from {replica.upper()}")
                     for uuid in absent_bundles:
                         print(f"\t{uuid}")
 
     class SearchDSSbyProjectUUID:
 
         def __init__(self, project_uuid, deployment, state, options):
+            self.project_uuid = project_uuid
             self.deployment = deployment
             self.state = state
             self.options = options
 
-            self.search_for_bundles(project_uuid)
-            for replica in ['aws', 'gcp']:
-                self.print_results(replica)
-
-        def search_for_bundles(self, project_uuid):
+        def check(self):
             # TODO: consider the possibility the search returns MORE bundles than Ingest knows about
-            output("\nSearching DSS for bundles with this project UUID...")
+            output("\tSearching DSS...")
             dss = DataStoreAgent(self.deployment)
             query = {
                 "query": {
@@ -123,7 +136,7 @@ class AnalyzeSubmission:
                         "must": [
                             {
                                 "match": {
-                                    "files.project_json.provenance.document_id": project_uuid
+                                    "files.project_json.provenance.document_id": self.project_uuid
                                 }
                             }
                         ],
@@ -144,23 +157,35 @@ class AnalyzeSubmission:
                     with self.state.lock:
                         bundle_components = result['bundle_fqid'].split('.', 1)
                         bundle_uuid = bundle_components[0]
+                        # TODO if we don't know about this bundle at all, create a new entry in bundle_map
                         self.state.bundle_map[bundle_uuid][replica]['in_dss_project_search'] = True
             output("done.\n")
 
-        def print_results(self, replica):
+        def print_results(self):
+            for replica in ['aws', 'gcp']:
+                self._print_results_for_replica(replica)
+
+        def _print_results_for_replica(self, replica):
             primary_bundles_indexed_by_project = [
-                k for (k, v) in self.state.bundle_map.items() if v[replica].get('in_dss_project_search')]
-            print(f"In {replica.upper()} DSS, {len(primary_bundles_indexed_by_project)} are indexed by project")
+                k for (k, v) in self.state.bundle_map.items()
+                if v['type'] == 'primary'
+                and v[replica].get('in_dss_project_search')
+            ]
+            print(f"\tIn {replica.upper()} DSS, "
+                  f"{len(primary_bundles_indexed_by_project)} bundles are indexed by project")
             if self.options.verbose:
                 for bundle_uuid in primary_bundles_indexed_by_project:
                     print(f"\t{bundle_uuid}")
 
             primary_bundles_not_indexed_by_project = [
-                k for (k, v) in self.state.bundle_map.items() if not v[replica].get('in_dss_project_search')]
+                k for (k, v) in self.state.bundle_map.items()
+                if v['type'] == 'primary'
+                and not v[replica].get('in_dss_project_search')
+            ]
             if len(primary_bundles_not_indexed_by_project) > 0:
                 print(
-                    f"In {replica.upper()} DSS, "
-                    "{len(primary_bundles_not_indexed_by_project)} are NOT indexed by project")
+                    f"\tIn {replica.upper()} DSS, "
+                    f"{len(primary_bundles_not_indexed_by_project)} bundles are NOT indexed by project")
                 for bundle_uuid in primary_bundles_not_indexed_by_project:
                     print(f"\t{bundle_uuid}")
 
@@ -171,17 +196,20 @@ class AnalyzeSubmission:
             self.state = state
             self.options = options
 
-            self.search_for_bundles()
-            self.print_results('aws')
-            self.print_results('gcp')
+            self.primary_bundle_count = self.state.primary_bundle_count
+            self.checked_bundles = {'aws': 0, 'gcp': 0}
 
-        def search_for_bundles(self):
-            output("\nSearching AWS & GCP DSS for secondary bundles...")
+        def check(self):
+            output("\tSearching for secondary bundles: ")
             pool = ThreadPool(self.options.jobs)
-            for pri_uuid in self.state.bundle_map.keys():
-                self.state.bundle_map[pri_uuid]['results_bundles'] = {}
+            for pri_uuid in self.state.iter_primary_bundles():
                 for replica in ['aws', 'gcp']:
-                    self.state.bundle_map[pri_uuid][replica]['results_bundles'] = []
+                    replica_data = self.state.bundle_map[pri_uuid][replica]
+                    if 'results_bundles' in replica_data:
+                        if len(replica_data['results_bundles']) > 0:
+                            continue
+                    else:
+                        replica_data['results_bundles'] = []
                     pool.add_task(self._find_secondary_bundles_for_primary_bundle, pri_uuid, replica)
             pool.wait_for_completion()
             output("...done.\n")
@@ -196,14 +224,25 @@ class AnalyzeSubmission:
                 }
             }
             results = dss.search(query, replica=replica)
-            output(f"{len(results)}")
             if len(results) > 0:
                 with self.state.lock:
                     for result in results:
                         results_bundle_uuid = result['bundle_fqid'].split('.')[0]
                         self.state.bundle_map[pri_uuid][replica]['results_bundles'].append(results_bundle_uuid)
+            self.checked_bundles[replica] += 1
+            self._print_progress()
 
-        def print_results(self, replica):
+        def _print_progress(self):
+            if sys.stdout.isatty():
+                output(f"\r\tSearching for secondary bundles: "
+                       f"AWS: {self.checked_bundles['aws']}/{self.primary_bundle_count}"
+                       f" GCP: {self.checked_bundles['gcp']}/{self.primary_bundle_count}")
+
+        def print_results(self):
+            self._print_results_for_replica('aws')
+            self._print_results_for_replica('gcp')
+
+        def _print_results_for_replica(self, replica):
             replica_results = {k: v[replica]['results_bundles'] for (k, v) in self.state.bundle_map.items()}
 
             i = 0
@@ -211,10 +250,10 @@ class AnalyzeSubmission:
                 pri_sec = {k: v for (k, v) in replica_results.items() if len(v) == i}
                 count = len(pri_sec)
                 if count > 0:
-                    print(f"In {replica.upper()} there are {count} primary bundles with {i} results bundles")
+                    print(f"\tIn {replica.upper()} there are {count} primary bundles with {i} results bundles")
                     if self.options.verbose or i != 1:
                         for pri, sec in pri_sec.items():
-                            print(f"\tprimary: {pri} secondary: {sec}")
+                            print(f"\t\tprimary: {pri} secondary: {sec}")
 
                 for key in pri_sec.keys():
                     del replica_results[key]
@@ -229,41 +268,63 @@ class AnalyzeSubmission:
         parser.add_argument('-j', '--jobs', type=int, default=10, help="concurrently level to use (default: 10)")
         parser.add_argument('-s', '--save', action='store_true',
                             help="save state in <submission_id>.json file for future use")
+        parser.add_argument('-l', '--load', action='store_true',
+                            help="load state from <submission_id>.json file and print results")
+        parser.add_argument('-u', '--update', action='store_true',
+                            help="update loaded state")
 
         args = parser.parse_args()
+        if not args.load:
+            args.update = True
         self.verbose = args.verbose
-        self.concurrency = args.jobs
         self.state = self.AnalysisState()
 
         self.deployment = self._choose_deployment(args)
-        print(f"Using deployment: {self.deployment}")
-
         subm = self._retreive_submission(args.submission_id)
 
         project = subm.project()
-        print(f"Project UUID: {project.uuid}")
+        print(f"\tProject UUID: {project.uuid}")
 
-        self._get_primary_bundle_list_from_ingest(subm)
-        self.DSSBundlePresenceChecker(self.deployment, self.state, options=args)
-        self.SearchDSSbyProjectUUID(project_uuid=project.uuid, deployment=self.deployment,
-                                    state=self.state, options=args)
-        self.SearchDSSforSecondaryBundles(deployment=self.deployment, state=self.state, options=args)
+        if args.load:
+            self.state.load(filename=f"{args.submission_id}.json")
+        else:
+            self._get_primary_bundle_list_from_ingest(subm)
+
+        print("\nPHASE 2: checking bundles are present in DSS:")
+        checker2 = self.DSSBundlePresenceChecker(self.deployment, self.state, options=args)
+        if args.update:
+            checker2.check()
+        checker2.print_results()
+
+        print("\nPHASE 3: check DSS for primary bundles with this project UUID:")
+        checker3 = self.SearchDSSbyProjectUUID(project_uuid=project.uuid, deployment=self.deployment,
+                                               state=self.state, options=args)
+        if args.update:
+            checker3.check()
+        checker3.print_results()
+
+        print("\nPHASE 4: check DSS for secondary bundles:")
+        checker4 =self.SearchDSSforSecondaryBundles(deployment=self.deployment, state=self.state, options=args)
+        if args.update:
+            checker4.check()
+        checker4.print_results()
+
         if args.save:
             self.state.save(filename=f"{args.submission_id}.json")
 
     def _choose_deployment(self, args):
         if 'deployment' in args and args.deployment:
-            return args.deployment
+            deployment = args.deployment
         elif 'DEPLOYMENT_STAGE' in os.environ:
             deployment = os.environ['DEPLOYMENT_STAGE']
             answer = input(f"Use deployment {deployment}? (y/n): ")
-            if answer is 'y':
-                return deployment
-            else:
+            if answer is not 'y':
                 exit(1)
         else:
             print("You must supply the --deployment argument or set environment variable DEPLOYMENT_STAGE")
             sys.exit(1)
+        print(f"Using deployment: {deployment}")
+        return deployment
 
     def _retreive_submission(self, submission_id):
         output("\nRetreiving submission...")

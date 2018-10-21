@@ -33,6 +33,18 @@ class AnalyzeSubmission:
     # Cache results so we can reload and update later?
     """
 
+    class AnalysisState:
+
+        def __init__(self):
+            self.bundle_map = {}
+            self.lock = Lock()
+
+        def save(self, filename):
+            output(f"\nSaving results in {filename}...")
+            with open(filename, 'w') as fp:
+                fp.write(json.dumps(self.bundle_map, indent=4))
+            output("done\n")
+
     def __init__(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-d', '--deployment', help="search this deployment")
@@ -45,12 +57,10 @@ class AnalyzeSubmission:
         args = parser.parse_args()
         self.verbose = args.verbose
         self.concurrency = args.jobs
+        self.state = self.AnalysisState()
 
         self.deployment = self._choose_deployment(args)
         print(f"Using deployment: {self.deployment}")
-
-        self.bundle_data_map = {}
-        self.map_mutex = Lock()
 
         subm = self._retreive_submission(args.submission_id)
 
@@ -62,7 +72,7 @@ class AnalyzeSubmission:
         self._search_dss_for_bundles_with_this_project_id(project.uuid)
         self._search_for_secondary_bundles()
         if args.save:
-            self._save_state(filename=f"{args.submission_id}.json")
+            self.state.save(filename=f"{args.submission_id}.json")
 
     def _choose_deployment(self, args):
         if 'deployment' in args and args.deployment:
@@ -90,29 +100,29 @@ class AnalyzeSubmission:
         output("\nRetrieving submission's primary bundle list...")
 
         for pri_uuid in subm.bundles():
-            self.bundle_data_map[pri_uuid] = {
+            self.state.bundle_map[pri_uuid] = {
                 'aws': {},
                 'gcp': {}
             }
         output("done.\n")
 
-        output(f"Ingest created {len(self.bundle_data_map)} bundles.\n")
+        output(f"Ingest created {len(self.state.bundle_map)} bundles.\n")
         if self.verbose:
-            for bundle_uuid in sorted(self.bundle_data_map.keys()):
+            for bundle_uuid in sorted(self.state.bundle_map.keys()):
                 print(f"\t{bundle_uuid}")
 
     def _check_bundles_are_in_DSS(self):
         output("\nChecking bundles are in AWS & GCP DSS...")
         pool = ThreadPool(self.concurrency)
-        for bundle_uuid in self.bundle_data_map.keys():
-            self.bundle_data_map[bundle_uuid]['dss_presence'] = {}
+        for bundle_uuid in self.state.bundle_map.keys():
+            self.state.bundle_map[bundle_uuid]['dss_presence'] = {}
             for replica in ['aws', 'gcp']:
                 pool.add_task(self._check_bundle_mainifest_exists, bundle_uuid, replica)
         pool.wait_for_completion()
         output("done.\n")
 
         for replica in ['aws', 'gcp']:
-            bundle_replica_presence = {k: v[replica]['dss_presence'] for (k, v) in self.bundle_data_map.items()}
+            bundle_replica_presence = {k: v[replica]['dss_presence'] for (k, v) in self.state.bundle_map.items()}
             present_bundles = [k for (k, v) in bundle_replica_presence.items() if v]
             absent_bundles = [k for (k, v) in bundle_replica_presence.items() if not v]
             print(f"{len(present_bundles)} bundle are present in {replica.upper()}")
@@ -129,15 +139,13 @@ class AnalyzeSubmission:
         dss = DataStoreAgent(self.deployment)
         try:
             dss.bundle_manifest(bundle_uuid, replica)
-            self.map_mutex.acquire()
-            self.bundle_data_map[bundle_uuid][replica]['dss_presence'] = True
+            with self.state.lock:
+                self.state.bundle_map[bundle_uuid][replica]['dss_presence'] = True
             output(".")
         except AssertionError as e:
-            self.map_mutex.acquire()
-            self.bundle_data_map[bundle_uuid][replica]['dss_presence'] = False
+            with self.state.lock:
+                self.state.bundle_map[bundle_uuid][replica]['dss_presence'] = False
             output("x")
-        finally:
-            self.map_mutex.release()
 
     def _search_dss_for_bundles_with_this_project_id(self, project_uuid):
         # TODO: consider the possibility the search returns MORE bundles than Ingest knows about
@@ -167,13 +175,10 @@ class AnalyzeSubmission:
         for replica in ['aws', 'gcp']:
             results = dss.search(query, replica=replica)
             for result in results:
-                self.map_mutex.acquire()
-                try:
+                with self.state.lock:
                     bundle_components = result['bundle_fqid'].split('.', 1)
                     bundle_uuid = bundle_components[0]
-                    self.bundle_data_map[bundle_uuid][replica]['in_dss_project_search'] = True
-                finally:
-                    self.map_mutex.release()
+                    self.state.bundle_map[bundle_uuid][replica]['in_dss_project_search'] = True
         output("done.\n")
 
         for replica in ['aws', 'gcp']:
@@ -181,14 +186,14 @@ class AnalyzeSubmission:
 
     def _print_results_for_search_by_project_uuid(self, replica):
         primary_bundles_indexed_by_project = [
-            k for (k, v) in self.bundle_data_map.items() if v[replica].get('in_dss_project_search')]
+            k for (k, v) in self.state.bundle_map.items() if v[replica].get('in_dss_project_search')]
         print(f"In {replica.upper()} DSS, {len(primary_bundles_indexed_by_project)} are indexed by project")
         if self.verbose:
             for bundle_uuid in primary_bundles_indexed_by_project:
                 print(f"\t{bundle_uuid}")
 
         primary_bundles_not_indexed_by_project = [
-            k for (k, v) in self.bundle_data_map.items() if not v[replica].get('in_dss_project_search')]
+            k for (k, v) in self.state.bundle_map.items() if not v[replica].get('in_dss_project_search')]
         if len(primary_bundles_not_indexed_by_project) > 0:
             print(f"In {replica.upper()} DSS, {len(primary_bundles_not_indexed_by_project)} are NOT indexed by project")
             for bundle_uuid in primary_bundles_not_indexed_by_project:
@@ -197,10 +202,10 @@ class AnalyzeSubmission:
     def _search_for_secondary_bundles(self):
         output("\nSearching AWS & GCP DSS for secondary bundles...")
         pool = ThreadPool(self.concurrency)
-        for pri_uuid in self.bundle_data_map.keys():
-            self.bundle_data_map[pri_uuid]['results_bundles'] = {}
+        for pri_uuid in self.state.bundle_map.keys():
+            self.state.bundle_map[pri_uuid]['results_bundles'] = {}
             for replica in ['aws', 'gcp']:
-                self.bundle_data_map[pri_uuid][replica]['results_bundles'] = []
+                self.state.bundle_map[pri_uuid][replica]['results_bundles'] = []
                 pool.add_task(self._find_secondary_bundles_for_primary_bundle, pri_uuid, replica)
         pool.wait_for_completion()
         output("...done.\n")
@@ -219,16 +224,13 @@ class AnalyzeSubmission:
         results = dss.search(query, replica=replica)
         output(f"{len(results)}")
         if len(results) > 0:
-            self.map_mutex.acquire()
-            try:
+            with self.state.lock:
                 for result in results:
                     results_bundle_uuid = result['bundle_fqid'].split('.')[0]
-                    self.bundle_data_map[pri_uuid][replica]['results_bundles'].append(results_bundle_uuid)
-            finally:
-                self.map_mutex.release()
+                    self.state.bundle_map[pri_uuid][replica]['results_bundles'].append(results_bundle_uuid)
 
     def _print_secondary_results_bundles_results(self, replica):
-        replica_results = {k: v[replica]['results_bundles'] for (k, v) in self.bundle_data_map.items()}
+        replica_results = {k: v[replica]['results_bundles'] for (k, v) in self.state.bundle_map.items()}
 
         i = 0
         while len(replica_results) > 0:
@@ -244,12 +246,6 @@ class AnalyzeSubmission:
                 del replica_results[key]
 
             i += 1
-
-    def _save_state(self, filename):
-        output(f"\nSaving results in {filename}...")
-        with open(filename, 'w') as fp:
-            fp.write(json.dumps(self.bundle_data_map, indent=4))
-        output("done\n")
 
 
 def output(message, newline_before=False, newline_after=False):

@@ -1,3 +1,6 @@
+# Changes for v0.6.1 (2018-10-22)
+Fix load vs clean bug
+
 # Changes for v0.6.0 (2018-10-21)
 analyze-submission:
  - use --jobs to configure concurrency

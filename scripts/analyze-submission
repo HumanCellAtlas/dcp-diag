@@ -67,11 +67,10 @@ class AnalyzeSubmission:
             output("done.\n", V_SUMMARY)
 
         def load(self, filename):
-            if os.path.isfile(filename):
-                output(f"\tLoading state from {filename}...", V_SUMMARY)
-                with open(filename, 'r') as fp:
-                    self.bundle_map = json.loads(fp.read())
-                output("done\n", V_SUMMARY)
+            output(f"\tLoading state from {filename}...", V_SUMMARY)
+            with open(filename, 'r') as fp:
+                self.bundle_map = json.loads(fp.read())
+            output("done\n", V_SUMMARY)
 
     class DSSBundlePresenceChecker:
 
@@ -298,7 +297,7 @@ class AnalyzeSubmission:
         output(f"\tProject UUID: {project.uuid}\n", V_SUMMARY)
         state_filename = f"{args.submission_id}.json"
 
-        if args.fresh:
+        if args.fresh or not os.path.isfile(state_filename):
             output("\nPHASE 1: Get primary bundle list from Ingest:\n", V_SUMMARY)
             self._get_primary_bundle_list_from_ingest(subm)
         else:

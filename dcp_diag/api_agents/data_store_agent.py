@@ -7,11 +7,12 @@ import requests
 
 class DataStoreAgent:
 
-    DSS_API_URL_TEMPLATE = "https://dss.{deployment}.data.humancellatlas.org/v1"
-
     def __init__(self, deployment):
         self.deployment = deployment
-        self.dss_url = self.DSS_API_URL_TEMPLATE.format(deployment=deployment)
+        if self.deployment == 'prod':
+            self.dss_url = "https://dss.data.humancellatlas.org/v1"
+        else:
+            self.dss_url = "https://dss.{deployment}.data.humancellatlas.org/v1".format(deployment=deployment)
 
     def search(self, query, replica='aws'):
         results = []

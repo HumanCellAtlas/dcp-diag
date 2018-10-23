@@ -1,3 +1,6 @@
+# Changes for v0.6.2 (2018-10-23)
+Now works in production environment too.
+
 # Changes for v0.6.1 (2018-10-22)
 Fix load vs clean bug
 

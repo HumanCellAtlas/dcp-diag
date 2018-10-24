@@ -48,9 +48,15 @@ class AnalyzeSubmission:
 
     class AnalysisState:
 
-        def __init__(self):
+        SAVEFILE_SCHEMA_VERSION = 1
+
+        def __init__(self, submission_id):
+            self.submission_id = submission_id
+            self.project_uuid = None
             self.bundle_map = {}
             self.lock = Lock()
+            self._state_filename = f"{self.submission_id}.json"
+            self._raw_data = None
 
         @property
         def primary_bundle_count(self):
@@ -60,17 +66,37 @@ class AnalyzeSubmission:
             for uuid in [k for (k, v) in self.bundle_map.items() if v['type'] == 'primary']:
                 yield uuid
 
-        def save(self, filename):
-            output(f"\tSaving state in {filename}...", V_SUMMARY)
-            with open(filename, 'w') as fp:
-                fp.write(json.dumps(self.bundle_map, indent=4))
+        def savefile_is_good(self):
+            if not os.path.isfile(self._state_filename):
+                return False
+            self._load_data()
+            return 'version' in self._raw_data and self._raw_data['version'] == self.SAVEFILE_SCHEMA_VERSION
+
+        def save(self):
+            output(f"\tSaving state in {self._state_filename}...", V_SUMMARY)
+            with open(self._state_filename, 'w') as fp:
+                data = {
+                    'version': self.SAVEFILE_SCHEMA_VERSION,
+                    'submission_id': self.submission_id,
+                    'project_uuid': self.project_uuid,
+                    'bundle_map': self.bundle_map
+                }
+                fp.write(json.dumps(data, indent=4))
             output("done.\n", V_SUMMARY)
 
-        def load(self, filename):
-            output(f"\tLoading state from {filename}...", V_SUMMARY)
-            with open(filename, 'r') as fp:
-                self.bundle_map = json.loads(fp.read())
+        def load(self):
+            output(f"\tLoading state from {self._state_filename}...", V_SUMMARY)
+            if not self._raw_data:
+                self._load_data()
+            self.submission_id = self._raw_data['submission_id']
+            self.project_uuid = self._raw_data['project_uuid']
+            self.bundle_map = self._raw_data['bundle_map']
+            del self._raw_data
             output("done\n", V_SUMMARY)
+
+        def _load_data(self):
+            with open(self._state_filename, 'r') as fp:
+                self._raw_data = json.loads(fp.read())
 
     class DSSBundlePresenceChecker:
 
@@ -138,8 +164,7 @@ class AnalyzeSubmission:
 
     class SearchDSSbyProjectUUID:
 
-        def __init__(self, project_uuid, deployment, state, options):
-            self.project_uuid = project_uuid
+        def __init__(self, deployment, state, options):
             self.deployment = deployment
             self.state = state
             self.options = options
@@ -154,7 +179,7 @@ class AnalyzeSubmission:
                         "must": [
                             {
                                 "match": {
-                                    "files.project_json.provenance.document_id": self.project_uuid
+                                    "files.project_json.provenance.document_id": self.state.project_uuid
                                 }
                             }
                         ],
@@ -299,21 +324,19 @@ class AnalyzeSubmission:
         args = parser.parse_args()
         global verbosity_level
         verbosity_level = args.verbosity
-        self.state = self.AnalysisState()
 
         self.deployment = self._choose_deployment(args)
-        subm = self._retreive_submission(args.submission_id)
+        self.state = self.AnalysisState(args.submission_id)
 
-        project = subm.project()
-        output(f"\tProject UUID: {project.uuid}\n", V_SUMMARY)
-        state_filename = f"{args.submission_id}.json"
-
-        if args.fresh or not os.path.isfile(state_filename):
-            output("\nPHASE 1: Get primary bundle list from Ingest:\n", V_SUMMARY)
-            self._get_primary_bundle_list_from_ingest(subm)
-        else:
+        if self.state.savefile_is_good() and not args.fresh:
             output("\nPHASE 1: Loading cached state:\n", V_SUMMARY)
-            self.state.load(filename=state_filename)
+            self.state.load()
+            output(f"\tSubmission ID: {self.state.submission_id}\n", V_SUMMARY)
+            output(f"\tProject UUID: {self.state.project_uuid}\n", V_SUMMARY)
+            output(f"\tIngest created {self.state.primary_bundle_count} bundles.\n", V_SUMMARY)
+        else:
+            output("\nPHASE 1: Get submission primary bundle list from Ingest:\n", V_SUMMARY)
+            self._get_submission_project_and_primary_bundle_list_from_ingest()
 
         output("\nPHASE 2: Checking bundles are present in DSS:\n", V_SUMMARY)
         checker2 = self.DSSBundlePresenceChecker(self.deployment, self.state, options=args)
@@ -321,8 +344,7 @@ class AnalyzeSubmission:
         checker2.print_results()
 
         output("\nPHASE 3: Check DSS for primary bundles with this project UUID:\n", V_SUMMARY)
-        checker3 = self.SearchDSSbyProjectUUID(project_uuid=project.uuid, deployment=self.deployment,
-                                               state=self.state, options=args)
+        checker3 = self.SearchDSSbyProjectUUID(deployment=self.deployment, state=self.state, options=args)
         checker3.check()
         checker3.print_results()
 
@@ -332,7 +354,7 @@ class AnalyzeSubmission:
         checker4.print_results()
 
         output(f"\nPHASE 6: Save state:\n", V_SUMMARY)
-        self.state.save(state_filename)
+        self.state.save()
 
     def _choose_deployment(self, args):
         if 'deployment' in args and args.deployment:
@@ -348,13 +370,18 @@ class AnalyzeSubmission:
         output(f"Using deployment: {deployment}\n", V_SUMMARY)
         return deployment
 
-    def _retreive_submission(self, submission_id):
-        output("\nRetreiving submission...", V_SUMMARY)
+    def _get_submission_project_and_primary_bundle_list_from_ingest(self):
+        output("\tRetreiving submission...", V_SUMMARY)
         finder = Finder.factory(finder_name="ingest", deployment=self.deployment)
-        submission = finder.find(f"subm_id={submission_id}")
+        submission = finder.find(f"subm_id={self.state.submission_id}")
         output("done.\n", V_SUMMARY)
-        output(str(submission), V_SUMMARY)
-        return submission
+        output(f"\tSubmission ID: {submission.envelope_id}\n", V_SUMMARY)
+
+        project = submission.project()
+        self.state.project_uuid = project.uuid
+        output(f"\tProject UUID: {self.state.project_uuid}\n", V_SUMMARY)
+
+        self._get_primary_bundle_list_from_ingest(submission)
 
     def _get_primary_bundle_list_from_ingest(self, subm):
         output("\tRetrieving submission's primary bundle list...", V_SUMMARY)
@@ -367,7 +394,7 @@ class AnalyzeSubmission:
             }
         output("done.\n", V_SUMMARY)
 
-        output(f"\tIngest created {len(self.state.bundle_map)} bundles.\n", V_SUMMARY)
+        output(f"\tIngest created {self.state.primary_bundle_count} bundles.\n", V_SUMMARY)
         if verbosity_level >= V_GOOD_DETAIL:
             for bundle_uuid in sorted(self.state.bundle_map.keys()):
                 print(f"\t{bundle_uuid}")

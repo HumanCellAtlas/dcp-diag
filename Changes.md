@@ -1,3 +1,7 @@
+# Changes for v0.8.0 (2018-10-24)
+analyze-submission: show accurate starting counts when we already have partial results
+Save all Ingest state in savefile, version the statefile schema.
+
 # Changes for v0.7.0 (2018-10-24)
 Use bundle FQID instead of UUID everywhere we can
 

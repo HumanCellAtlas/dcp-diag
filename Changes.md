@@ -1,3 +1,6 @@
+# Changes for v0.7.0 (2018-10-24)
+Use bundle FQID instead of UUID everywhere we can
+
 # Changes for v0.6.2 (2018-10-23)
 Now works in production environment too.
 

@@ -20,6 +20,8 @@ class DataStoreAgent:
         query_params = { 'replica': replica}
         query_json = {'es_query': query}
         for response in self.iter_pages(url, query_params=query_params, json_body=query_json):
+            if 'results' not in response:
+                raise RuntimeError(f"No results in response: {response}")
             results.extend(response['results'])
         return results
 

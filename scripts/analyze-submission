@@ -106,7 +106,10 @@ class AnalyzeSubmission:
             self.options = options
 
             self.primary_bundle_count = self.state.primary_bundle_count
-            self.checked_bundles = {'aws': 0, 'gcp': 0}
+            self.checked_bundles = {
+                'aws': len([k for (k, v) in self.state.bundle_map.items() if v['aws'].get('dss_presence')]),
+                'gcp': len([k for (k, v) in self.state.bundle_map.items() if v['gcp'].get('dss_presence')])
+            }
 
         def check(self):
             output("\tChecking for bundle manifests:", V_SUMMARY)
@@ -225,7 +228,7 @@ class AnalyzeSubmission:
                 and not v[replica].get('in_dss_project_search')
             }
             output(f"\tIn {replica.upper()} DSS, "
-                   f"{len(primary_bundles_indexed_by_project)} bundles are indexed by project\n", V_SUMMARY)
+                   f"{len(primary_bundles_indexed_by_project)} primary bundles are indexed by project\n", V_SUMMARY)
             if verbosity_level >= V_GOOD_DETAIL:
                 for bundle_uuid, bundle_info in primary_bundles_indexed_by_project.items():
                     print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
@@ -233,7 +236,8 @@ class AnalyzeSubmission:
             if len(primary_bundles_not_indexed_by_project) > 0:
                 output(
                     f"\tIn {replica.upper()} DSS, "
-                    f"{len(primary_bundles_not_indexed_by_project)} bundles are NOT indexed by project\n", V_SUMMARY)
+                    f"{len(primary_bundles_not_indexed_by_project)} primary bundles are NOT indexed by project\n",
+                    V_SUMMARY)
                 if verbosity_level >= V_BAD_DETAIL:
                     for bundle_uuid, bundle_info in primary_bundles_not_indexed_by_project.items():
                         print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
@@ -246,7 +250,12 @@ class AnalyzeSubmission:
             self.options = options
 
             self.primary_bundle_count = self.state.primary_bundle_count
-            self.checked_bundles = {'aws': 0, 'gcp': 0}
+            self.checked_bundles = {
+                'aws': len([k for (k, v) in self.state.bundle_map.items()
+                            if len(v['aws'].get('results_bundles', [])) > 0]),
+                'gcp': len([k for (k, v) in self.state.bundle_map.items()
+                            if len(v['gcp'].get('results_bundles', [])) > 0])
+            }
 
         def check(self):
             output("\tSearching for secondary bundles: ", V_SUMMARY)

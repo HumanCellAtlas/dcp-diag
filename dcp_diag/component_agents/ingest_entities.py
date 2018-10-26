@@ -1,5 +1,7 @@
 import json
 
+from termcolor import colored
+
 
 class Project:
     """
@@ -21,10 +23,9 @@ class Project:
         self.data = project_data
 
     def __str__(self, prefix=""):
-        return f"{prefix}Project\n" \
-               f"{prefix}\tid={self.id}\n" \
-               f"{prefix}\tuuid={self.uuid}\n" \
-               f"{prefix}\tshort_name={self.short_name}"
+        return colored(f"{prefix}Project {self.id}\n", 'green') + \
+               f"{prefix}    uuid={self.uuid}\n" \
+               f"{prefix}    short_name={self.short_name}"
 
     @property
     def id(self):
@@ -38,10 +39,10 @@ class Project:
     def short_name(self):
         return self.data['content']['project_core']['project_short_name']
 
-    def show_associated(self, entities_to_show, verbose=False):
+    def show_associated(self, entities_to_show, prefix="", verbose=False):
         if 'submissions' in entities_to_show:
             for subm in self.submission_envelopes():
-                print(subm.__str__(prefix="\t"))
+                print(subm.__str__(prefix=prefix))
 
     def submission_envelopes(self):
         data = self.api.get(self.data['_links']['submissionEnvelopes']['href'])
@@ -73,23 +74,22 @@ class SubmissionEnvelope:
         self.envelope_id = self.data['_links']['self']['href'].split('/')[-1]
 
     def __str__(self, prefix=""):
-        return f"{prefix}SubmissionEnvelope\n" \
-               f"{prefix}\tid={self.envelope_id}\n" \
-               f"{prefix}\tuuid={self.uuid}\n" \
-               f"{prefix}\tstatus={self.status}"
+        return colored(f"{prefix}SubmissionEnvelope {self.envelope_id}\n", 'green') + \
+               f"{prefix}    uuid={self.uuid}\n" \
+               f"{prefix}    status={self.status}"
 
-    def show_associated(self, entities_to_show, verbose=False):
+    def show_associated(self, entities_to_show, prefix="", verbose=False):
         self.verbose = verbose
         if 'bundles' in entities_to_show:
             if self.status == 'Complete':
-                print("\tBundles:")
+                print(f"{prefix}Bundles:")
                 for bundle in self.bundles():
-                    print(f"\t\t{bundle}")
+                    print(prefix + "    " + bundle)
 
         if 'files' in entities_to_show:
-                print("\tFiles:")
+                print(f"{prefix}Files:")
                 for file in self.files():
-                    self._output(file)
+                    self._output(file.__str__(prefix=prefix))
 
     def _output(self, thing):
         if self.verbose:
@@ -147,9 +147,9 @@ class File:
     def __init__(self, file_data):
         self._data = file_data
 
-    def __str__(self):
-        return (f"\t\tfileName {self.name}\n" +
-                f"\t\tcloudUrl {self.cloud_url}\n")
+    def __str__(self, prefix="", verbose=False):
+        return (f"{prefix}    fileName {self.name}\n" +
+                f"{prefix}    cloudUrl {self.cloud_url}\n")
 
     def __repr__(self):
         return json.dumps(self._data, indent=2)

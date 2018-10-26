@@ -86,7 +86,7 @@ class DbChecksum(Base):
                  f"{prefix}             created_at: {self.created_at}\n" \
                  f"{prefix}             updated_at: {self.updated_at}\n"
         if verbose:
-            output = output + f"{prefix}\t          checksums: {self.checksums}\n"
+            output = output + f"{prefix}              checksums: {self.checksums}\n"
         return output
 
 
@@ -108,7 +108,7 @@ class DbNotification(Base):
                  f"{prefix}    created_at: {self.created_at}\n" \
                  f"{prefix}    updated_at: {self.updated_at}\n"
         if verbose:
-            output = output + f"{prefix}\t   payload: {self.payload}\n"
+            output = output + f"{prefix}       payload: {self.payload}\n"
         return output
 
 
@@ -136,7 +136,7 @@ class DbValidation(Base):
                  f"{prefix}               created_at: {self.created_at}\n" \
                  f"{prefix}               updated_at: {self.updated_at}\n"
         if verbose:
-            output = output + f"{prefix}\t              results: {self.results}\n"
+            output = output + f"{prefix}                  results: {self.results}\n"
         return output
 
 

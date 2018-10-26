@@ -1,3 +1,6 @@
+# Changes for v0.9.0 (2018-10-26)
+dcpdig @upload [area|file_id]
+
 # Changes for v0.8.0 (2018-10-24)
 analyze-submission: show accurate starting counts when we already have partial results
 Save all Ingest state in savefile, version the statefile schema.

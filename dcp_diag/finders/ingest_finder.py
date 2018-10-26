@@ -1,9 +1,9 @@
 import re
 import sys
 
-from ..api_agents import IngestApiAgent
+from ..component_agents import IngestApiAgent
 from .finder import Finder
-from ..api_agents.ingest_entities import SubmissionEnvelope, Project
+from ..component_agents.ingest_entities import SubmissionEnvelope, Project
 
 
 class IngestFinder:
@@ -13,7 +13,7 @@ class IngestFinder:
     def __init__(self, deployment):
         self.ingest = IngestApiAgent(deployment=deployment)
 
-    def find(self, expression, display_this=None):
+    def find(self, expression):
 
         field_name, field_value = expression.split('=')
 

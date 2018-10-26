@@ -13,7 +13,7 @@ if __name__ == '__main__':  # noqa
 from hca.util.pool import ThreadPool
 
 from dcp_diag.finders import Finder
-from dcp_diag.api_agents import DataStoreAgent
+from dcp_diag.component_agents import DataStoreAgent
 
 V_SILENT = 0
 V_SUMMARY = 1

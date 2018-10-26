@@ -42,6 +42,8 @@ class DcpDig:
             entity.show_associated(entities_to_show, prefix="\t", verbose=args.verbose)
         except DcpDiagException as e:
             print("\n" + e)
+        except KeyboardInterrupt:
+            pass
 
     def _choose_deployment(self, args):
         if 'deployment' in args and args.deployment:

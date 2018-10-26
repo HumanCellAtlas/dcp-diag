@@ -1,4 +1,7 @@
 boto3 >= 1.7.13
+dcplib
 hca
+psycopg2-binary
 requests
+sqlalchemy
 termcolor

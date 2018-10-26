@@ -1,0 +1,2 @@
+class DcpDiagException(RuntimeError):
+    pass

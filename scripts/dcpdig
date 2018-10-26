@@ -9,6 +9,7 @@ if __name__ == '__main__':  # noqa
     pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
     sys.path.insert(0, pkg_root)  # noqa
 
+from dcp_diag import DcpDiagException
 from dcp_diag.finders import Finder
 
 
@@ -34,10 +35,13 @@ class DcpDig:
 
         entities_to_show = args.show.split(',')
 
-        finder = Finder.factory(finder_name=args.component, deployment=self.deployment)
-        entity = finder.find(args.expression)
-        print(entity)
-        entity.show_associated(entities_to_show, verbose=args.verbose)
+        try:
+            finder = Finder.factory(finder_name=args.component, deployment=self.deployment)
+            entity = finder.find(args.expression)
+            print(entity)
+            entity.show_associated(entities_to_show, prefix="\t", verbose=args.verbose)
+        except DcpDiagException as e:
+            print("\n" + e)
 
     def _choose_deployment(self, args):
         if 'deployment' in args and args.deployment:

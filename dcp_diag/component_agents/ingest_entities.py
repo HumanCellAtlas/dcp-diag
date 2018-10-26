@@ -40,7 +40,7 @@ class Project:
         return self.data['content']['project_core']['project_short_name']
 
     def show_associated(self, entities_to_show, prefix="", verbose=False):
-        if 'submissions' in entities_to_show:
+        if 'submissions' in entities_to_show or 'all' in entities_to_show:
             for subm in self.submission_envelopes():
                 print(subm.__str__(prefix=prefix))
 
@@ -80,13 +80,13 @@ class SubmissionEnvelope:
 
     def show_associated(self, entities_to_show, prefix="", verbose=False):
         self.verbose = verbose
-        if 'bundles' in entities_to_show:
+        if 'bundles' in entities_to_show or 'all' in entities_to_show:
             if self.status == 'Complete':
                 print(f"{prefix}Bundles:")
                 for bundle in self.bundles():
                     print(prefix + "    " + bundle)
 
-        if 'files' in entities_to_show:
+        if 'files' in entities_to_show or 'all' in entities_to_show:
                 print(f"{prefix}Files:")
                 for file in self.files():
                     self._output(file.__str__(prefix=prefix))

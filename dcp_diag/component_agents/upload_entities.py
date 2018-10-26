@@ -25,7 +25,7 @@ class DbUploadArea(Base):
             f"{prefix}     updated_at: {self.updated_at}\n"
 
     def show_associated(self, entities_to_show, prefix="", verbose=False):
-        if 'files' in entities_to_show:
+        if 'files' in entities_to_show or 'all' in entities_to_show:
             for file in self.files:
                 print(file.__str__(prefix=prefix, verbose=verbose))
                 file.show_associated(entities_to_show, prefix="\t\t", verbose=verbose)
@@ -51,13 +51,13 @@ class DbFile(Base):
             f"{prefix}        updated_at: {self.updated_at}\n"
 
     def show_associated(self, entities_to_show, prefix="", verbose=False):
-        if 'checksums' in entities_to_show:
+        if 'checksums' in entities_to_show or 'all' in entities_to_show:
             for checksum in self.checksums:
                 print(checksum.__str__(prefix=prefix, verbose=verbose))
-        if 'validations' in entities_to_show:
+        if 'validations' in entities_to_show or 'all' in entities_to_show:
             for val in self.validations:
                 print(val.__str__(prefix=prefix, verbose=verbose))
-        if 'notifications' in entities_to_show:
+        if 'notifications' in entities_to_show or 'all' in entities_to_show:
             for notif in self.notifications:
                 print(notif.__str__(prefix=prefix, verbose=verbose))
 

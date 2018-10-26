@@ -1,3 +1,6 @@
+# Changes for v0.10.0 (2018-10-26)
+dcpdig: allow 'all' as an option for --show
+
 # Changes for v0.9.0 (2018-10-26)
 dcpdig @upload [area|file_id]
 

@@ -41,7 +41,7 @@ class DcpDig:
             print(entity)
             entity.show_associated(entities_to_show, prefix="\t", verbose=args.verbose)
         except DcpDiagException as e:
-            print("\n" + e)
+            print("\n" + str(e))
         except KeyboardInterrupt:
             pass
 

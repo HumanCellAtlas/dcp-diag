@@ -33,6 +33,14 @@ Note that submission may be abbreviated to "subm" or "sub", e.g.
 
 Show files and bundles associated with an Ingest submission with Mongo ID `foo`:
 
-    `dcpdig @ingest subm_id=foo --show files,bundles`
+    dcpdig @ingest subm_id=foo --show files,bundles
 
+Show Upload Area records for area, files, checksums, validations and
+notifications including payloads (verbose mode):
+
+    dcpdig @upload area=<uuid> --show all --verbose
+
+Show file, checksum records for a single file:
+
+    dcpdig @upload file_id=<uuid>/<filename> --show checksums
 

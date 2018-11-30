@@ -7,7 +7,7 @@ release_major:
 	$(MAKE) release
 
 release_minor:
-	$(eval export TAG=$(shell git describe --tags --match 'v*.*.*' | perl -ne '/^v(\d)+\.(\d)+\.(\d+)+/; print "v$$1.@{[$$2+1]}.0"'))
+	$(eval export TAG=$(shell git describe --tags --match 'v*.*.*' | perl -ne '/^v(\d+)\.(\d+)\.(\d+)+/; print "v$$1.@{[$$2+1]}.0"'))
 	$(MAKE) release
 
 release_patch:

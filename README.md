@@ -16,7 +16,7 @@ DCP to allow it to walk the object graph.
 
 ### Usage
 
-Usage: `dpdig @<component> <expression> --show <entities_to_show>`
+Usage: `dcpdig @<component> <expression> --show <entities_to_show>`
 
 Examples:
 

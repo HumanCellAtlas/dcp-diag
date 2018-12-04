@@ -1,5 +1,5 @@
 boto3 >= 1.7.13
-dcplib
+cromwell-tools>=1.0.1
 hca
 psycopg2-binary
 requests

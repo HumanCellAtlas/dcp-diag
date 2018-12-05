@@ -6,7 +6,7 @@ from .ingest_auth_agent import IngestAuthAgent
 
 class IngestUIAgent:
 
-    INGEST_UI_URL_TEMPLATE = "http://ingest.{}.data.humancellatlas.org"
+    INGEST_UI_URL_TEMPLATE = "https://ingest.{}.data.humancellatlas.org"
 
     def __init__(self, deployment):
         self.deployment = deployment

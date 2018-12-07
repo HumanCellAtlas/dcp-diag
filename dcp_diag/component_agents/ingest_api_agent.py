@@ -11,6 +11,6 @@ class IngestApiAgent(HateoasAgent):
 
     def _ingest_api_url(self):
         if self.deployment == 'prod':
-            return "http://api.ingest.data.humancellatlas.org"
+            return "https://api.ingest.data.humancellatlas.org"
         else:
-            return f"http://api.ingest.{self.deployment}.data.humancellatlas.org"
+            return f"https://api.ingest.{self.deployment}.data.humancellatlas.org"

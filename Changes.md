@@ -1,3 +1,6 @@
+# Changes for v0.11.0 (2018-11-30)
+dcpdig: Allow project_uuid=<x> --show submissions AND bundles
+
 # Changes for v0.10.0 (2018-10-26)
 dcpdig: allow 'all' as an option for --show
 

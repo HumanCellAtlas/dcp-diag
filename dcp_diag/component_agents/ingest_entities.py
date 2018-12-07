@@ -43,6 +43,7 @@ class Project:
         if 'submissions' in entities_to_show or 'all' in entities_to_show:
             for subm in self.submission_envelopes():
                 print(subm.__str__(prefix=prefix))
+                subm.show_associated(entities_to_show, prefix=f"{prefix}\t", verbose=verbose)
 
     def submission_envelopes(self):
         data = self.api.get(self.data['_links']['submissionEnvelopes']['href'])

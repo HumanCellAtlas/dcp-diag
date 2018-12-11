@@ -5,11 +5,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from termcolor import colored
 
+DbBase = declarative_base(name='DbBase')
 
-Base = declarative_base()
 
-
-class DbUploadArea(Base):
+class DbUploadArea(DbBase):
     __tablename__ = 'upload_area'
     id = Column(String(), primary_key=True)
     bucket_name = Column(String(), nullable=False)
@@ -31,7 +30,7 @@ class DbUploadArea(Base):
                 file.show_associated(entities_to_show, prefix="\t\t", verbose=verbose)
 
 
-class DbFile(Base):
+class DbFile(DbBase):
     __tablename__ = 'file'
     id = Column(String(), primary_key=True)
     upload_area_id = Column(String(), ForeignKey('upload_area.id'), nullable=False)
@@ -62,7 +61,7 @@ class DbFile(Base):
                 print(notif.__str__(prefix=prefix, verbose=verbose))
 
 
-class DbChecksum(Base):
+class DbChecksum(DbBase):
     __tablename__ = 'checksum'
     id = Column(String(), primary_key=True)
     file_id = Column(String(), ForeignKey('file.id'), nullable=False)
@@ -90,7 +89,7 @@ class DbChecksum(Base):
         return output
 
 
-class DbNotification(Base):
+class DbNotification(DbBase):
     __tablename__ = 'notification'
     id = Column(String(), primary_key=True)
     file_id = Column(String(), ForeignKey('file.id'), nullable=False)
@@ -112,7 +111,7 @@ class DbNotification(Base):
         return output
 
 
-class DbValidation(Base):
+class DbValidation(DbBase):
     __tablename__ = 'validation'
     id = Column(String(), primary_key=True)
     file_id = Column(String(), ForeignKey('file.id'), nullable=False)
@@ -148,7 +147,7 @@ DbFile.notifications = relationship('DbNotification', order_by=DbNotification.cr
 
 def init_db(database_uri):
     engine = create_engine(database_uri)
-    Base.metadata.bind = engine
+    DbBase.metadata.bind = engine
     db_session_maker = sessionmaker()
     db_session_maker.bind = engine
     return db_session_maker

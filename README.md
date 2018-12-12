@@ -16,31 +16,94 @@ DCP to allow it to walk the object graph.
 
 ### Usage
 
-Usage: `dcpdig @<component> <expression> --show <entities_to_show>`
+Usage: `dcpdig --deployment=<deployment> @<component> <expression> --show <entities_to_show>`
+
+#### Usage with the Ingestion Service
+
+Use component `@ingest`.
+
+Expressions:
+
+```
+submission_id=<mongo-id>
+submission_uuid=<uuid>
+project_uuid=<uuid>
+bundle_uuid=<uuid>
+```
+
+Abbreviations that may be used in expressions:
+
+* `summission` may be abbreviated to `subm`, e.g. `subm_uuid`.
+* `project` may be abbreviated to `proj`.
+
+Entities:
+
+```
+submissions
+bundles
+files
+```
 
 Examples:
 
-Find the submission relating to a DSS bundle UUID:
+Given a project UUID from the integration environment, show submissions
+and their bundles and files:
 
-    dcpdig @ingest bundle_uuid=<x>
+    dcpdig -d integration @ingest proj_uuid=<uuid> --show all
 
 Find a (Mongo) submission ID given a submission UUID:
 
-    dcpdig @ingest submission_uuid=<x>
+    dcpdig -d staging @ingest submission_uuid=<x>
 
-Note that submission may be abbreviated to "subm" or "sub", e.g.
-`subm_uuid=x`.
+Show bundles associated with an Ingest submission with Mongo ID `foo`:
 
-Show files and bundles associated with an Ingest submission with Mongo ID `foo`:
+    dcpdig -d dev @ingest subm_id=foo --show bundles
 
-    dcpdig @ingest subm_id=foo --show files,bundles
+Find the submission relating to a DSS bundle UUID.  This does a "brute
+force" search through all submissions to find the one using this bundle:
 
-Show Upload Area records for area, files, checksums, validations and
-notifications including payloads (verbose mode):
+    dcpdig -d dev @ingest bundle_uuid=<x>
 
-    dcpdig @upload area=<uuid> --show all --verbose
+#### Usage with the Upload Service
+
+Use component `@upload`.
+
+Expressions:
+
+```
+area=<uuid>
+file_id=<uuid>/<filename>
+validation_id=<uuid>
+batch_job=<uuid>
+```
+
+Entities:
+
+```
+files
+checksums
+validations
+notifications
+batch_jobs
+logs
+```
+or use `all`
+
+Permisions: you must be using AWS credentials (typically an AWS_PROFILE)
+that has access to the Upload Service secrets in AWS SecretsManager.
+Most DCP developers has this level of access.
+
+Examples:
+
+Exhaustively dump everything associated with an upload area, verbosely.
+This can be very long:
+
+    dcpdig @upload area=<uuid> --show all -v
 
 Show file, checksum records for a single file:
 
     dcpdig @upload file_id=<uuid>/<filename> --show checksums
 
+Show validation, batch job records and job log:
+
+    dcpdig @upload validation_id=<uuid> --show batch_jobs,logs

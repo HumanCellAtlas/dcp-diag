@@ -1,15 +1,8 @@
 from sqlalchemy.orm.exc import NoResultFound
 
-from dcplib.config import Config
-
 from .. import DcpDiagException
 from .finder import Finder
-from ..component_agents.upload_entities import DbUploadArea, DbFile, init_db
-
-
-class UploadDbConfig(Config):
-    def __init__(self, *args, **kwargs):
-        super().__init__(component_name='upload', secret_name='database', **kwargs)
+from ..component_agents.upload_entities import DbUploadArea, DbFile, DBSessionMaker
 
 
 class UploadFinder:
@@ -26,8 +19,7 @@ class UploadFinder:
 
     def find(self, expression):
         field_name, field_value = expression.split('=')
-        db_session_maker = init_db(UploadDbConfig(deployment=self.deployment).database_uri)
-        db = db_session_maker()
+        db = DBSessionMaker(self.deployment).session()
 
         if field_name == 'file_id':
             try:

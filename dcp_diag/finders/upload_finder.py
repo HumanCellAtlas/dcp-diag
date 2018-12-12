@@ -35,6 +35,8 @@ class UploadFinder:
             except NoResultFound:
                 raise DcpDiagException(f"No record of Upload Area \"{field_value}\""
                                        f" found in Upload's {self.deployment} database.")
+        else:
+            raise DcpDiagException(f"Sorry I don't know how to find an {field_name}")
 
 
 Finder.register(UploadFinder)

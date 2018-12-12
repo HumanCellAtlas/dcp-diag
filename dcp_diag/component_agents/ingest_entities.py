@@ -2,8 +2,10 @@ import json
 
 from termcolor import colored
 
+from . import EntityBase
 
-class Project:
+
+class Project(EntityBase):
     """
     Model an Ingest Project entity
     """
@@ -22,10 +24,10 @@ class Project:
         self.api = ingest_api_agent
         self.data = project_data
 
-    def __str__(self, prefix=""):
+    def __str__(self, prefix="", verbose=False):
         return colored(f"{prefix}Project {self.id}\n", 'green') + \
                f"{prefix}    uuid={self.uuid}\n" \
-               f"{prefix}    short_name={self.short_name}"
+               f"{prefix}    short_name={self.short_name}\n"
 
     @property
     def id(self):
@@ -39,11 +41,13 @@ class Project:
     def short_name(self):
         return self.data['content']['project_core']['project_short_name']
 
-    def show_associated(self, entities_to_show, prefix="", verbose=False):
-        if 'submissions' in entities_to_show or 'all' in entities_to_show:
-            for subm in self.submission_envelopes():
-                print(subm.__str__(prefix=prefix))
-                subm.show_associated(entities_to_show, prefix=f"{prefix}\t", verbose=verbose)
+    def print(self, prefix="", verbose=False, associated_entities_to_show=None):
+        print(self.__str__(prefix=prefix, verbose=verbose))
+        if associated_entities_to_show:
+            prefix = f"{prefix}\t"
+            if 'submissions' in associated_entities_to_show or 'all' in associated_entities_to_show:
+                for subm in self.submission_envelopes():
+                    subm.print(prefix=prefix, verbose=verbose, associated_entities_to_show=associated_entities_to_show)
 
     def submission_envelopes(self):
         data = self.api.get(self.data['_links']['submissionEnvelopes']['href'])
@@ -53,7 +57,7 @@ class Project:
         ]
 
 
-class SubmissionEnvelope:
+class SubmissionEnvelope(EntityBase):
     """
     Model an Ingest Submission Envelope entity
     """
@@ -74,29 +78,26 @@ class SubmissionEnvelope:
         self.api = ingest_api_agent
         self.envelope_id = self.data['_links']['self']['href'].split('/')[-1]
 
-    def __str__(self, prefix=""):
+    def __str__(self, prefix="", verbose=False):
         return colored(f"{prefix}SubmissionEnvelope {self.envelope_id}\n", 'green') + \
                f"{prefix}    uuid={self.uuid}\n" \
                f"{prefix}    status={self.status}"
 
-    def show_associated(self, entities_to_show, prefix="", verbose=False):
-        self.verbose = verbose
-        if 'bundles' in entities_to_show or 'all' in entities_to_show:
-            if self.status == 'Complete':
-                print(f"{prefix}Bundles:")
-                for bundle in self.bundles():
-                    print(prefix + "    " + bundle)
+    def print(self, prefix="", verbose=False, associated_entities_to_show=None):
+        print(self.__str__(prefix=prefix, verbose=verbose))
+        if associated_entities_to_show:
+            prefix = f"{prefix}    "
+            if 'bundles' in associated_entities_to_show or 'all' in associated_entities_to_show:
+                if self.status == 'Complete':
+                    print(colored(f"{prefix}Bundles:", 'cyan'))
+                    for bundle in self.bundles():
+                        print(prefix + "    " + bundle)
 
-        if 'files' in entities_to_show or 'all' in entities_to_show:
-                print(f"{prefix}Files:")
-                for file in self.files():
-                    self._output(file.__str__(prefix=prefix))
-
-    def _output(self, thing):
-        if self.verbose:
-            print("%r" % thing)
-        else:
-            print(thing)
+            if 'files' in associated_entities_to_show or 'all' in associated_entities_to_show:
+                    print(colored(f"{prefix}Files:", 'cyan'))
+                    for file in self.files():
+                        file.print(prefix=prefix, verbose=verbose,
+                                   associated_entities_to_show=associated_entities_to_show)
 
     def files(self):
         return [File(file_data) for file_data in
@@ -162,3 +163,6 @@ class File:
     @property
     def cloud_url(self):
         return self._data['cloudUrl']
+
+    def print(self, prefix="", verbose=False, associated_entities_to_show=None):
+        print(self.__str__(prefix=prefix, verbose=verbose))

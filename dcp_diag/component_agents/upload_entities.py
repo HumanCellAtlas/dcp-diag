@@ -7,6 +7,8 @@ from termcolor import colored
 
 from dcplib.config import Config
 
+from . import EntityBase
+
 DbBase = declarative_base(name='DbBase')
 
 
@@ -27,7 +29,7 @@ class DBSessionMaker:
         return self.session_maker()
 
 
-class DbUploadArea(DbBase):
+class DbUploadArea(DbBase, EntityBase):
     __tablename__ = 'upload_area'
     id = Column(String(), primary_key=True)
     bucket_name = Column(String(), nullable=False)
@@ -36,20 +38,22 @@ class DbUploadArea(DbBase):
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
 
     def __str__(self, prefix="", verbose=False):
-        return colored(f"{prefix}Upload Area {self.id}\n", 'green') + \
+        return colored(f"{prefix}Upload Area {self.id}\n", 'blue') + \
             f"{prefix}    bucket_name: {self.bucket_name}\n" \
             f"{prefix}         Status: {self.status}\n" \
             f"{prefix}     created_at: {self.created_at}\n" \
             f"{prefix}     updated_at: {self.updated_at}\n"
 
-    def show_associated(self, entities_to_show, prefix="", verbose=False):
-        if 'files' in entities_to_show or 'all' in entities_to_show:
-            for file in self.files:
-                print(file.__str__(prefix=prefix, verbose=verbose))
-                file.show_associated(entities_to_show, prefix="\t\t", verbose=verbose)
+    def print(self, prefix="", verbose=False, associated_entities_to_show=None):
+        print(self.__str__(prefix=prefix, verbose=verbose))
+        if associated_entities_to_show:
+            if 'files' in associated_entities_to_show or 'all' in associated_entities_to_show:
+                prefix = f"\t{prefix}"
+                for file in self.files:
+                    file.print(prefix=prefix, verbose=verbose, associated_entities_to_show=associated_entities_to_show)
 
 
-class DbFile(DbBase):
+class DbFile(DbBase, EntityBase):
     __tablename__ = 'file'
     id = Column(String(), primary_key=True)
     upload_area_id = Column(String(), ForeignKey('upload_area.id'), nullable=False)
@@ -68,19 +72,25 @@ class DbFile(DbBase):
             f"{prefix}        created_at: {self.created_at}\n" \
             f"{prefix}        updated_at: {self.updated_at}\n"
 
-    def show_associated(self, entities_to_show, prefix="", verbose=False):
-        if 'checksums' in entities_to_show or 'all' in entities_to_show:
-            for checksum in self.checksums:
-                print(checksum.__str__(prefix=prefix, verbose=verbose))
-        if 'validations' in entities_to_show or 'all' in entities_to_show:
-            for val in self.validations:
-                print(val.__str__(prefix=prefix, verbose=verbose))
-        if 'notifications' in entities_to_show or 'all' in entities_to_show:
-            for notif in self.notifications:
-                print(notif.__str__(prefix=prefix, verbose=verbose))
+    def print(self, prefix="", verbose=False, associated_entities_to_show=None):
+        print(self.__str__(prefix=prefix, verbose=verbose))
+        if associated_entities_to_show:
+            prefix = f"\t{prefix}"
+            if 'checksums' in associated_entities_to_show or 'all' in associated_entities_to_show:
+                for checksum in self.checksums:
+                    checksum.print(prefix=prefix, verbose=verbose,
+                                   associated_entities_to_show=associated_entities_to_show)
+            if 'validations' in associated_entities_to_show or 'all' in associated_entities_to_show:
+                for val in self.validations:
+                    val.print(prefix=prefix, verbose=verbose,
+                              associated_entities_to_show=associated_entities_to_show)
+            if 'notifications' in associated_entities_to_show or 'all' in associated_entities_to_show:
+                for notif in self.notifications:
+                    notif.print(prefix=prefix, verbose=verbose,
+                                associated_entities_to_show=associated_entities_to_show)
 
 
-class DbChecksum(DbBase):
+class DbChecksum(DbBase, EntityBase):
     __tablename__ = 'checksum'
     id = Column(String(), primary_key=True)
     file_id = Column(String(), ForeignKey('file.id'), nullable=False)
@@ -95,7 +105,7 @@ class DbChecksum(DbBase):
     file = relationship("DbFile", back_populates='checksums')
 
     def __str__(self, prefix="", verbose=False):
-        output = colored(f"{prefix}Checksum {self.id}\n", 'blue') + \
+        output = colored(f"{prefix}Checksum {self.id}\n", 'cyan') + \
                  f"{prefix}                File ID: {self.file_id}\n" \
                  f"{prefix}                 Job ID: {self.job_id}\n" \
                  f"{prefix}                 Status: {self.status}\n" \
@@ -107,8 +117,11 @@ class DbChecksum(DbBase):
             output = output + f"{prefix}              checksums: {self.checksums}\n"
         return output
 
+    def print(self, prefix="", verbose=False, associated_entities_to_show=None):
+        print(self.__str__(prefix=prefix, verbose=verbose))
 
-class DbNotification(DbBase):
+
+class DbNotification(DbBase, EntityBase):
     __tablename__ = 'notification'
     id = Column(String(), primary_key=True)
     file_id = Column(String(), ForeignKey('file.id'), nullable=False)
@@ -120,7 +133,7 @@ class DbNotification(DbBase):
     file = relationship("DbFile", back_populates='notifications')
 
     def __str__(self, prefix="", verbose=False):
-        output = colored(f"{prefix}Notification {self.id}\n", 'blue') + \
+        output = colored(f"{prefix}Notification {self.id}\n", 'magenta') + \
                  f"{prefix}       File ID: {self.file_id}\n" \
                  f"{prefix}        Status: {self.status}\n" \
                  f"{prefix}    created_at: {self.created_at}\n" \
@@ -129,8 +142,11 @@ class DbNotification(DbBase):
             output = output + f"{prefix}       payload: {self.payload}\n"
         return output
 
+    def print(self, prefix="", verbose=False, associated_entities_to_show=None):
+        print(self.__str__(prefix=prefix, verbose=verbose))
 
-class DbValidation(DbBase):
+
+class DbValidation(DbBase, EntityBase):
     __tablename__ = 'validation'
     id = Column(String(), primary_key=True)
     file_id = Column(String(), ForeignKey('file.id'), nullable=False)
@@ -145,7 +161,7 @@ class DbValidation(DbBase):
     file = relationship("DbFile", back_populates='validations')
 
     def __str__(self, prefix="", verbose=False):
-        output = colored(f"{prefix}Validation {self.id}\n", 'blue') + \
+        output = colored(f"{prefix}Validation {self.id}\n", 'yellow') + \
                  f"{prefix}                  File ID: {self.file_id}\n" \
                  f"{prefix}                   Job ID: {self.job_id}\n" \
                  f"{prefix}                   Status: {self.status}\n" \
@@ -156,6 +172,9 @@ class DbValidation(DbBase):
         if verbose:
             output = output + f"{prefix}                  results: {self.results}\n"
         return output
+
+    def print(self, prefix="", verbose=False, associated_entities_to_show=None):
+        print(self.__str__(prefix=prefix, verbose=verbose))
 
 
 DbUploadArea.files = relationship('DbFile', order_by=DbFile.id, back_populates='upload_area')

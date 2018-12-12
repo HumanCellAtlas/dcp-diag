@@ -5,7 +5,26 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from termcolor import colored
 
+from dcplib.config import Config
+
 DbBase = declarative_base(name='DbBase')
+
+
+class UploadDbConfig(Config):
+    def __init__(self, *args, **kwargs):
+        super().__init__(component_name='upload', secret_name='database', **kwargs)
+
+
+class DBSessionMaker:
+
+    def __init__(self, deployment):
+        engine = create_engine(UploadDbConfig(deployment=deployment).database_uri)
+        DbBase.metadata.bind = engine
+        self.session_maker = sessionmaker()
+        self.session_maker.bind = engine
+
+    def session(self):
+        return self.session_maker()
 
 
 class DbUploadArea(DbBase):
@@ -143,11 +162,3 @@ DbUploadArea.files = relationship('DbFile', order_by=DbFile.id, back_populates='
 DbFile.checksums = relationship('DbChecksum', order_by=DbChecksum.created_at, back_populates='file')
 DbFile.validations = relationship('DbValidation', order_by=DbValidation.created_at, back_populates='file')
 DbFile.notifications = relationship('DbNotification', order_by=DbNotification.created_at, back_populates='file')
-
-
-def init_db(database_uri):
-    engine = create_engine(database_uri)
-    DbBase.metadata.bind = engine
-    db_session_maker = sessionmaker()
-    db_session_maker.bind = engine
-    return db_session_maker

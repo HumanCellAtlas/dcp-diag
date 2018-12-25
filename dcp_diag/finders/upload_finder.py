@@ -1,15 +1,8 @@
 from sqlalchemy.orm.exc import NoResultFound
 
-from dcplib.config import Config
-
 from .. import DcpDiagException
 from .finder import Finder
-from ..component_agents.upload_entities import DbUploadArea, DbFile, init_db
-
-
-class UploadDbConfig(Config):
-    def __init__(self, *args, **kwargs):
-        super().__init__(component_name='upload', secret_name='database', **kwargs)
+from ..component_agents.upload_entities import DbUploadArea, DbFile, DbValidation, BatchJob, DBSessionMaker
 
 
 class UploadFinder:
@@ -26,23 +19,37 @@ class UploadFinder:
 
     def find(self, expression):
         field_name, field_value = expression.split('=')
-        db_session_maker = init_db(UploadDbConfig(deployment=self.deployment).database_uri)
-        db = db_session_maker()
+        db = DBSessionMaker(self.deployment).session()
 
-        if field_name == 'file_id':
+        if field_name == 'file_id' or field_name == 'file':
             try:
                 file = db.query(DbFile).filter(DbFile.id == field_value).one()
                 return file
             except NoResultFound:
                 raise DcpDiagException(f"No record of File \"{field_value}\""
                                        f" found in Upload's {self.deployment} database.")
-        elif field_name == 'area':
+
+        elif field_name == 'area_id' or field_name == 'area':
             try:
                 area = db.query(DbUploadArea).filter(DbUploadArea.id == field_value).one()
                 return area
             except NoResultFound:
                 raise DcpDiagException(f"No record of Upload Area \"{field_value}\""
                                        f" found in Upload's {self.deployment} database.")
+
+        elif field_name == 'validation_id' or field_name == 'validation':
+            try:
+                validation = db.query(DbValidation).filter(DbValidation.id == field_value).one()
+                return validation
+            except NoResultFound:
+                raise DcpDiagException(f"No record of Validation \"{field_value}\""
+                                       f" found in Upload's {self.deployment} database.")
+
+        elif field_name == 'batch_job' or field_name == 'job_id':
+            return BatchJob.find_by_id(field_value)
+
+        else:
+            raise DcpDiagException(f"Sorry I don't know how to find an {field_name}")
 
 
 Finder.register(UploadFinder)

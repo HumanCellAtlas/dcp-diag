@@ -2,7 +2,7 @@ import json
 
 from termcolor import colored
 
-from . import EntityBase
+from dcp_diag.component_entities import EntityBase
 
 
 class Project(EntityBase):

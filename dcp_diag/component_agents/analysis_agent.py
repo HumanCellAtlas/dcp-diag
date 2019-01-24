@@ -15,7 +15,7 @@ class AnalysisAgent:
         Args:
             deployment (str): String representing the deployment environment to be queried on. It could be:
                 "dev", "integration", "staging" or "prod".
-            service_account_key (str): Opotional, path to the service account JSON key file, which is required by
+            service_account_key (str): Optional, path to the service account JSON key file, which is required by
                 authenticate with the Secondary-analysis service (Crowmell API). If not provided, the agent will assume
                 no authentication required for talking to secondary analysis, which is very likely to break or skip
                 a lot of commands that are using this agent.
@@ -141,7 +141,7 @@ class AnalysisAgent:
         Note, due to the open issue: https://github.com/broadinstitute/cromwell/issues/3115, if the result of workflows
         are more than ~1000, this function will very likely raise an error. The `with_labels` is a flag controlling the
         behavior of whether to query the workflows asking for the labels in the response, by default it's set to True,
-        so please set it to False if you don't want to risk getting errored responses.
+        so please set it to False if you don't want to risk getting error responses.
 
         Args:
             project_uuid (str): HCA DCP Ingest submission project-UUID.

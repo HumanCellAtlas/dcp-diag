@@ -5,6 +5,7 @@ import json
 import os
 import sys
 from threading import Lock
+import requests
 
 if __name__ == '__main__':  # noqa
     pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
@@ -14,6 +15,8 @@ from hca.util.pool import ThreadPool
 
 from dcp_diag.finders import Finder
 from dcp_diag.component_agents import DataStoreAgent
+from dcp_diag.component_agents import AnalysisAgent
+
 
 V_SILENT = 0
 V_SUMMARY = 1
@@ -38,6 +41,7 @@ class AnalyzeSubmission:
     # ✔︎    Primary bundles in DSS/GCP (direct access)
     # ✔︎    Primary bundles searchable in DSS/AWS using Project ID
     # ✔︎    Primary bundles searchable in DSS/GCP using Project ID
+    # ✔︎    Analysis workflows searchable in Secondary-Analysis using Project ID
     # ✔    Secondary bundles searchable in DSS/AWS using files.analysis_process_json.input_bundles
     # ✔    Secondary bundles searchable in DSS/GCP using files.analysis_process_json.input_bundles
     # todo  Secondary bundles searchable in DSS/AWS using Project ID
@@ -66,10 +70,48 @@ class AnalyzeSubmission:
             for uuid in [k for (k, v) in self.bundle_map.items() if v['type'] == 'primary']:
                 yield uuid
 
+        @property
+        def analysis_workflow_count(self):
+            """Return the number of the analysis workflows from bundle_map, if the map is empty, return 0."""
+            return sum([len(v['analysis_workflows']) for (k, v) in self.bundle_map.items() if v['type'] == 'primary'])
+
+        @property
+        def succeeded_analysis_workflow_count(self):
+            """Return the number of succeeded analysis workflows from bundle_map, if the map is empty, return 0."""
+            return sum([wf_body['status'] == 'Succeeded' for (k, v) in self.bundle_map.items()
+                        if v['type'] == 'primary' for wf_id, wf_body in v['analysis_workflows'].items()])
+
+        @property
+        def failed_analysis_workflow_count(self):
+            """Return the number of failed or aborted analysis workflows from bundle_map,
+                if the map is empty, return 0.
+            """
+            return sum([wf_body['status'] in ('Failed', 'Aborted') for (k, v) in self.bundle_map.items()
+                        if v['type'] == 'primary' for wf_id, wf_body in v['analysis_workflows'].items()])
+
+        @property
+        def running_analysis_workflow_count(self):
+            """Return the number of ongoing analysis workflows from bundle_map, if the map is empty, return 0."""
+            return sum([wf_body['status'] not in ('Failed', 'Aborted', 'Succeeded')
+                        for (k, v) in self.bundle_map.items() if v['type'] == 'primary'
+                            for wf_id, wf_body in v['analysis_workflows'].items()])
+
+        def iter_succeeded_analysis_workflows(self):
+            """Return an generator of all succeeded analysis workflows."""
+            nested_all_workflows = [
+                v['analysis_workflows'] for (k, v) in self.bundle_map.items() if v['type'] == 'primary'
+            ]
+            for workflow_obj in nested_all_workflows:
+                for id, body in workflow_obj.items():
+                    yield id
+
         def savefile_is_good(self):
             if not os.path.isfile(self._state_filename):
                 return False
-            self._load_data()
+            try:
+                self._load_data()
+            except json.decoder.JSONDecodeError:  # in some rare cases the file may exist but got broken
+                return False
             return 'version' in self._raw_data and self._raw_data['version'] == self.SAVEFILE_SCHEMA_VERSION
 
         def save(self):
@@ -139,6 +181,9 @@ class AnalyzeSubmission:
                 with self.state.lock:
                     self.state.bundle_map[bundle_uuid][replica]['dss_presence'] = False
                     output(f"\rbundle {bundle_uuid} is missing from {replica.upper()}\n", V_BAD_DETAIL)
+            with self.state.lock:
+                # create entry for analysis workflows at the same time
+                self.state.bundle_map[bundle_uuid]['analysis_workflows'] = {}
             self.checked_bundles[replica] += 1
             self._print_progress()
 
@@ -242,6 +287,110 @@ class AnalyzeSubmission:
                     for bundle_uuid, bundle_info in primary_bundles_not_indexed_by_project.items():
                         print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
 
+    class SearchAnalysisWorkflowsbyProjectUUID:
+
+        def __init__(self, deployment, state, options):
+            self.deployment = deployment
+            self.state = state
+            self.options = options
+            # FIXME: Use a better way to authenticate instead of asking for service account JSON key
+            # FIXME: If use OAuth, this should align with the Ingest Agent
+            self.service_account_key = self.options.credentials
+
+            self.analysis_workflow_count = self.state.analysis_workflow_count
+            self.succeeded_analysis_workflow_count = self.state.succeeded_analysis_workflow_count
+            self.failed_analysis_workflow_count = self.state.failed_analysis_workflow_count
+            self.running_analysis_workflow_count = self.state.running_analysis_workflow_count
+            self.succeeded_workflows = set(self.state.iter_succeeded_analysis_workflows())
+            self.failed_workflows = set([])
+            self.running_workflows = set([])
+            self.errors = set([])
+            self.errors_count = 0
+            self.remaining_analysis_workflows_summary = None
+
+        def check(self):
+            # TODO: this method is a very slow synchronous loop, speed up by using multi-threading with the options.jobs
+            output("\tSearching for secondary analysis workflows: ", V_SUMMARY)
+            analysis = AnalysisAgent(deployment=self.deployment,
+                                     service_account_key=self.service_account_key)
+
+            # TODO: remove the following line once there are no more scalability concerns of the analysis agent
+            with analysis.ignore_logging_msg():
+                all_analysis_workflows_summary_ids = self._get_workflows_summary(analysis_agent=analysis)
+
+                # figure out skippable workflows and exclude them from query to save I/O
+                self.remaining_analysis_workflows_summary = all_analysis_workflows_summary_ids - self.succeeded_workflows
+
+                self._get_workflows_detailed_info(analysis_agent=analysis)
+
+            output("...done.\n", V_SUMMARY)
+
+        def _get_workflows_summary(self, analysis_agent):
+            try:
+                total_count, workflows = analysis_agent.query_by_project_uuid(project_uuid=self.state.project_uuid,
+                                                                              with_labels=False)
+                self.analysis_workflow_count = total_count
+
+                # print the list of all workflows if the users want verbosity
+                if verbosity_level >= V_GOOD_DETAIL:
+                    for workflow in workflows:
+                        print(f"\t{workflow.uuid}")
+
+                return set([workflow.uuid for workflow in workflows])
+
+            except requests.exceptions.HTTPError as err:
+                output(f"An error occurred when trying to fetch the workflow list: {err}")
+
+        def _get_workflows_detailed_info(self, analysis_agent):
+            finished_work_count = len(self.succeeded_workflows)
+            remaining_work = self.remaining_analysis_workflows_summary
+
+            for idx, workflow_id in enumerate(remaining_work):
+                output("\r\tSearching for secondary analysis workflows: "
+                       f"{idx + 1 + finished_work_count}/{self.analysis_workflow_count}", V_SUMMARY)
+
+                try:
+                    detailed_workflow = analysis_agent.query_by_workflow_uuid(uuid=workflow_id)
+
+                    bundle_info = self.state.bundle_map[detailed_workflow.labels['bundle-uuid']]
+                    # TODO: control the detail of workflow based on "V_BAD_DETAIL"
+                    bundle_info['analysis_workflows'][workflow_id] = {
+                        'labels': detailed_workflow.labels,
+                        'start': detailed_workflow.start_time,
+                        'end': detailed_workflow.end_time,
+                        'id': detailed_workflow.uuid,
+                        'name': detailed_workflow.name,
+                        'status': detailed_workflow.status,
+                        'submission': detailed_workflow.submission_time
+                    }
+
+                    if detailed_workflow.status == 'Succeeded':
+                        self.succeeded_workflows.add(workflow_id)
+                        self.succeeded_analysis_workflow_count += 1
+                    elif detailed_workflow.status in ('Failed', 'Aborted'):
+                        self.failed_workflows.add(workflow_id)
+                        self.failed_analysis_workflow_count += 1
+                    else:
+                        self.running_workflows.add(workflow_id)
+                        self.running_analysis_workflow_count += 1
+
+                except requests.exceptions.HTTPError:
+                    self.errors.add(workflow_id)
+                    self.errors_count += 1
+                    output(f"\rAn error occurred when querying for workflow {workflow_id}\n", V_BAD_DETAIL)
+
+        def print_results(self):
+            # TODO: implement duplication checkers, so that we can see if there are duplicated
+            #       workflows ran for the same bundle. Similar to the PHASE 5
+
+            # TODO: make it print the workflow ids when user wants verbosity (V_GOOD_DETAIL)
+            output(f"\r\tWorkflows are succeeded  : {self.succeeded_analysis_workflow_count}/{self.analysis_workflow_count}\n"
+                   f"\tWorkflows are in progress: {self.running_analysis_workflow_count}/{self.analysis_workflow_count}\n"
+                   f"\tWorkflows are failed     : {self.failed_analysis_workflow_count}/{self.analysis_workflow_count}\n")
+            if self.errors:
+                # list the errors due to connection so user won't be confusing
+                output(f"\r\tError fetching requests   : {self.errors_count}/{self.analysis_workflow_count}\n")
+
     class SearchDSSforSecondaryBundles:
 
         def __init__(self, deployment, state, options):
@@ -329,6 +478,9 @@ class AnalyzeSubmission:
                             help="concurrently level to use (default: 10)")
         parser.add_argument('-f', '--fresh', action='store_true',
                             help="don't start with saved state (if present)")
+        parser.add_argument('-c', '--credentials', type=str, default='',
+                            help="path to the JSON file containing credentials to query for analysis "
+                                 "service(if present), otherwise will skip searching for workflows")
 
         args = parser.parse_args()
         global verbosity_level
@@ -343,6 +495,7 @@ class AnalyzeSubmission:
             output(f"\tSubmission ID: {self.state.submission_id}\n", V_SUMMARY)
             output(f"\tProject UUID: {self.state.project_uuid}\n", V_SUMMARY)
             output(f"\tIngest created {self.state.primary_bundle_count} bundles.\n", V_SUMMARY)
+            output(f"\tSecondary Analysis ran {self.state.analysis_workflow_count} analysis workflows.\n", V_SUMMARY)
         else:
             output("\nPHASE 1: Get submission primary bundle list from Ingest:\n", V_SUMMARY)
             self._get_submission_project_and_primary_bundle_list_from_ingest()
@@ -357,10 +510,21 @@ class AnalyzeSubmission:
         checker3.check()
         checker3.print_results()
 
-        output("\nPHASE 4: Check DSS for secondary bundles:\n", V_SUMMARY)
-        checker4 =self.SearchDSSforSecondaryBundles(deployment=self.deployment, state=self.state, options=args)
-        checker4.check()
-        checker4.print_results()
+        # Only query for the analysis workflows if the path to the service account JSON key is provided
+        if args.credentials:
+            output("\nPHASE 4: Check Secondary Analysis for workflows with this project UUID:\n", V_SUMMARY)
+            checker4 = self.SearchAnalysisWorkflowsbyProjectUUID(deployment=self.deployment,
+                                                                 state=self.state,
+                                                                 options=args)
+            checker4.check()
+            checker4.print_results()
+        else:
+            output("\nPHASE 4: No auth information provided, skip checking Secondary Analysis for workflows.\n")
+
+        output("\nPHASE 5: Check DSS for secondary bundles:\n", V_SUMMARY)
+        checker5 = self.SearchDSSforSecondaryBundles(deployment=self.deployment, state=self.state, options=args)
+        checker5.check()
+        checker5.print_results()
 
         output(f"\nPHASE 6: Save state:\n", V_SUMMARY)
         self.state.save()
@@ -380,7 +544,7 @@ class AnalyzeSubmission:
         return deployment
 
     def _get_submission_project_and_primary_bundle_list_from_ingest(self):
-        output("\tRetreiving submission...", V_SUMMARY)
+        output("\tRetrieving submission...", V_SUMMARY)
         finder = Finder.factory(finder_name="ingest", deployment=self.deployment)
         submission = finder.find(f"subm_id={self.state.submission_id}")
         output("done.\n", V_SUMMARY)

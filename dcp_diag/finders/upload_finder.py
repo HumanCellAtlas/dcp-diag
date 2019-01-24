@@ -2,7 +2,8 @@ from sqlalchemy.orm.exc import NoResultFound
 
 from .. import DcpDiagException
 from .finder import Finder
-from ..component_agents.upload_entities import DbUploadArea, DbFile, DbValidation, BatchJob, DBSessionMaker
+
+from dcp_diag.component_entities.upload_entities import DbUploadArea, DbFile, DbValidation, BatchJob, DBSessionMaker
 
 
 class UploadFinder:

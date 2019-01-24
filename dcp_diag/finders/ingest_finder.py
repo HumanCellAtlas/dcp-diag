@@ -1,10 +1,10 @@
 import re
 import sys
 
-from ..component_agents import IngestApiAgent
+from dcp_diag.component_agents import IngestApiAgent
 from .finder import Finder
-from ..component_agents.ingest_entities import SubmissionEnvelope, Project
 
+from dcp_diag.component_entities.ingest_entities import SubmissionEnvelope, Project
 
 class IngestFinder:
 
@@ -17,8 +17,8 @@ class IngestFinder:
 
         field_name, field_value = expression.split('=')
 
-        # substitute 'sub', 'subm' -> 'submission'
-        # substitute 'proj', -> 'project'
+        # substitute 'sub_id', 'subm_id' -> 'submission_id'
+        # substitute 'proj_id', -> 'project_id'
         field_name = re.sub(r"sub([^a-z])", "submission\\1", field_name)
         field_name = re.sub(r"subm([^a-z])", "submission\\1", field_name)
         field_name = re.sub(r"proj([^a-z])", "project\\1", field_name)

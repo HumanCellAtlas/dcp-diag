@@ -9,7 +9,7 @@ from termcolor import colored
 
 from dcplib.config import Config
 
-from . import EntityBase
+from dcp_diag.component_entities import EntityBase
 from .. import DcpDiagException
 
 DbBase = declarative_base(name='DbBase')

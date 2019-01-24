@@ -1,36 +1,55 @@
 from .. import DcpDiagException
 from .finder import Finder
 
+from dcp_diag.component_agents.analysis_agent import AnalysisAgent
+import re
+
 
 class AnalysisFinder:
 
     """
     dcpdig @analysis workflow_uuid=<id>
-    dcpdig @analysis project_uuid=<id>
     dcpdig @analysis bundle_uuid=<id>
     """
 
     name = 'analysis'
 
-    def __init__(self, deployment):
+    def __init__(self, deployment, service_account_key=''):
         self.deployment = deployment
+        # FIXME: Use a better way to authenticate instead of asking for service account JSON key
+        # FIXME: If use OAuth, this should align with the Ingest Agent
+        self.service_account_key = service_account_key
+        with AnalysisAgent.ignore_logging_msg():
+            self.analysis = AnalysisAgent(deployment=self.deployment, service_account_key=self.service_account_key)
 
     def find(self, expression):
-        """
+        """Find the target entities based on the expression.
 
         Args:
-            expression:
+            expression (str): An expression representing the targeting entity with it value, separated by '='.
+                It also supports shorthands, e.g.
+                - "bundle_uuid='xxx'"
+                - "workflow_uuid='yyy'"
+                - "wf_uuid='yyy'"
         """
+        if not self.service_account_key:
+            raise DcpDiagException("No auth information provided, skip checking Secondary Analysis for workflows.")
+
         field_name, field_value = expression.split('=')
 
-        if field_name == 'workflow_uuid':
-            print("Searching for the workflow(s) associated with the workflow_uuid for you!")
+        # substitute 'wf_id', -> 'workflow_id'
+        field_name = re.sub(r"wf([^a-z])", "workflow\\1", field_name)
 
-        elif field_name == 'project_uuid':
-            print("Searching for the workflow(s) associated with the project_uuid for you!")
+        if field_name == 'workflow_uuid':
+            print(f"Searching for workflow with UUID {field_name}...")
+            with self.analysis.ignore_logging_msg():
+                return self.analysis.query_by_workflow_uuid(uuid=field_value)
 
         elif field_name == 'bundle_uuid':
-            print("Searching for the workflow(s) associated with the primary bundle_uuid for you!")
+            print(f"Searching for workflow(s) with Bundle {field_name}...")
+            with self.analysis.ignore_logging_msg():
+                _, candidates = self.analysis.query_by_bundle(bundle_uuid=field_value)
+                return candidates
 
         else:
             print(f"Sorry I don't know how to find a {field_name}")

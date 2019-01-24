@@ -1,7 +1,7 @@
-boto3 >= 1.7.13
-cromwell-tools>=1.0.1
+boto3>=1.7.13
+cromwell-tools>=v1.1.0
 hca
 psycopg2-binary
-requests
+requests>=2.20.0
 sqlalchemy
 termcolor

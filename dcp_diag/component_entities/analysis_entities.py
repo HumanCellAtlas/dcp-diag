@@ -39,7 +39,7 @@ class Workflow(EntityBase):
 
     def __eq__(self, other):
         return (isinstance(self, type(other)) and isinstance(other, type(self)) and (
-        self.uuid, self.name, self.status, self.start_time, self.end_time) == (
+            self.uuid, self.name, self.status, self.start_time, self.end_time) == (
                 other.uuid, other.name, other.status, other.start_time, other.end_time))
 
     def __hash__(self):

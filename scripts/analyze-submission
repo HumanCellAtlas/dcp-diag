@@ -78,19 +78,23 @@ class AnalyzeSubmission:
         @property
         def succeeded_analysis_workflow_count(self):
             """Return the number of succeeded analysis workflows from bundle_map, if the map is empty, return 0."""
-            return sum([wf_body['status'] == 'Succeeded' for (k, v) in self.bundle_map.items() if v['type'] == 'primary' for wf_id, wf_body in v['analysis_workflows'].items()])
+            return sum([wf_body['status'] == 'Succeeded' for (k, v) in self.bundle_map.items()
+                        if v['type'] == 'primary' for wf_id, wf_body in v['analysis_workflows'].items()])
 
         @property
         def failed_analysis_workflow_count(self):
             """Return the number of failed or aborted analysis workflows from bundle_map,
                 if the map is empty, return 0.
             """
-            return sum([wf_body['status'] in ('Failed', 'Aborted') for (k, v) in self.bundle_map.items() if v['type'] == 'primary' for wf_id, wf_body in v['analysis_workflows'].items()])
+            return sum([wf_body['status'] in ('Failed', 'Aborted') for (k, v) in self.bundle_map.items()
+                        if v['type'] == 'primary' for wf_id, wf_body in v['analysis_workflows'].items()])
 
         @property
         def running_analysis_workflow_count(self):
             """Return the number of ongoing analysis workflows from bundle_map, if the map is empty, return 0."""
-            return sum([wf_body['status'] not in ('Failed', 'Aborted', 'Succeeded') for (k, v) in self.bundle_map.items() if v['type'] == 'primary' for wf_id, wf_body in v['analysis_workflows'].items()])
+            return sum([wf_body['status'] not in ('Failed', 'Aborted', 'Succeeded')
+                        for (k, v) in self.bundle_map.items() if v['type'] == 'primary'
+                            for wf_id, wf_body in v['analysis_workflows'].items()])
 
         def iter_succeeded_analysis_workflows(self):
             """Return an generator of all succeeded analysis workflows."""
@@ -385,7 +389,7 @@ class AnalyzeSubmission:
                    f"\tWorkflows are failed     : {self.failed_analysis_workflow_count}/{self.analysis_workflow_count}\n")
             if self.errors:
                 # list the errors due to connection so user won't be confusing
-                output(f"\r\tErrored fetch requests   : {self.errors_count}/{self.analysis_workflow_count}\n")
+                output(f"\r\tError fetching requests   : {self.errors_count}/{self.analysis_workflow_count}\n")
 
     class SearchDSSforSecondaryBundles:
 
@@ -518,7 +522,7 @@ class AnalyzeSubmission:
             output("\nPHASE 4: No auth information provided, skip checking Secondary Analysis for workflows.\n")
 
         output("\nPHASE 5: Check DSS for secondary bundles:\n", V_SUMMARY)
-        checker5 =self.SearchDSSforSecondaryBundles(deployment=self.deployment, state=self.state, options=args)
+        checker5 = self.SearchDSSforSecondaryBundles(deployment=self.deployment, state=self.state, options=args)
         checker5.check()
         checker5.print_results()
 

@@ -22,9 +22,9 @@ class UploadFinder:
         field_name, field_value = expression.split('=')
         db = DBSessionMaker(self.deployment).session()
 
-        if field_name == 'file_id' or field_name == 'file':
+        if field_name == 'file':
             try:
-                file = db.query(DbFile).filter(DbFile.id == field_value).one()
+                file = db.query(DbFile).filter(DbFile.s3_key == field_value).one()
                 return file
             except NoResultFound:
                 raise DcpDiagException(f"No record of File \"{field_value}\""
@@ -32,7 +32,7 @@ class UploadFinder:
 
         elif field_name == 'area_id' or field_name == 'area':
             try:
-                area = db.query(DbUploadArea).filter(DbUploadArea.id == field_value).one()
+                area = db.query(DbUploadArea).filter(DbUploadArea.uuid == field_value).one()
                 return area
             except NoResultFound:
                 raise DcpDiagException(f"No record of Upload Area \"{field_value}\""

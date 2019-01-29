@@ -72,7 +72,7 @@ Expressions:
 
 ```
 area=<uuid>
-file_id=<uuid>/<filename>
+file=<uuid>/<filename>
 validation_id=<uuid>
 batch_job=<uuid>
 ```
@@ -102,7 +102,7 @@ This can be very long:
 
 Show file, checksum records for a single file:
 
-    dcpdig @upload file_id=<uuid>/<filename> --show checksums
+    dcpdig @upload file=<uuid>/<filename> --show checksums
 
 Show validation, batch job records and job log:
 

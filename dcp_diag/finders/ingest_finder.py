@@ -10,7 +10,7 @@ class IngestFinder:
 
     name = "ingest"
 
-    def __init__(self, deployment):
+    def __init__(self, deployment, **args):
         self.ingest = IngestApiAgent(deployment=deployment)
 
     def find(self, expression):

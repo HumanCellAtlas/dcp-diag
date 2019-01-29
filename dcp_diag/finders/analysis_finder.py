@@ -14,11 +14,11 @@ class AnalysisFinder:
 
     name = 'analysis'
 
-    def __init__(self, deployment, service_account_key=''):
+    def __init__(self, deployment, **args):
         self.deployment = deployment
         # FIXME: Use a better way to authenticate instead of asking for service account JSON key
         # FIXME: If use OAuth, this should align with the Ingest Agent
-        self.service_account_key = service_account_key
+        self.service_account_key = args.get('service_account_key')
         with AnalysisAgent.ignore_logging_msg():
             self.analysis = AnalysisAgent(deployment=self.deployment, service_account_key=self.service_account_key)
 

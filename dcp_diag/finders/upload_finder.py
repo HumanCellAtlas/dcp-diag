@@ -15,7 +15,7 @@ class UploadFinder:
 
     name = 'upload'
 
-    def __init__(self, deployment):
+    def __init__(self, deployment, **args):
         self.deployment = deployment
 
     def find(self, expression):

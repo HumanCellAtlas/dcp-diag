@@ -28,43 +28,39 @@ class DcpDig:
                             help="path to the JSON file containing credentials to query for analysis "
                                  "service(if present), otherwise will skip searching for workflows")
 
-        args = parser.parse_args()
-        self.verbose = args.verbose
+        args = vars(parser.parse_args())
+        self.verbose = args.pop('verbose')
 
         self.deployment = self._choose_deployment(args)
         print(f"Using deployment {self.deployment}")
 
-        if args.component.startswith('@'):
-            args.component = args.component[1:]
+        component = args.pop('component')
+        if component.startswith('@'):
+            component = component[1:]
 
-        entities_to_show = args.show.split(',')
+        entities_to_show = args.pop('show').split(',')
 
         try:
-            # TODO: switch to OAuth to simplify the following conditional blocks
-            if args.credentials:
-                finder = Finder.factory(finder_name=args.component,
-                                        deployment=self.deployment,
-                                        service_account_key=args.credentials)
-            else:
-                finder = Finder.factory(finder_name=args.component,
-                                        deployment=self.deployment)
-            entity = finder.find(args.expression)
+            expression = args.pop('expression')
+            finder = Finder.factory(finder_name=component, deployment=self.deployment, **args)
+            entity = finder.find(expression)
+
             if isinstance(entity, collections.abc.Iterable):
                 # some of the bundles may trigger more than one analysis workflows
                 # iterate the results here in case there are multiple workflows or
                 # other entities are returned
                 for sub_entity in entity:
-                    sub_entity.print(verbose=args.verbose, associated_entities_to_show=entities_to_show)
+                    sub_entity.print(verbose=self.verbose, associated_entities_to_show=entities_to_show)
             else:
-                entity.print(verbose=args.verbose, associated_entities_to_show=entities_to_show)
+                entity.print(verbose=self.verbose, associated_entities_to_show=entities_to_show)
         except DcpDiagException as e:
             print("\n" + str(e))
         except KeyboardInterrupt:
             pass
 
     def _choose_deployment(self, args):
-        if 'deployment' in args and args.deployment:
-            return args.deployment
+        if 'deployment' in args and args['deployment']:
+            return args.pop('deployment')
         elif 'DEPLOYMENT_STAGE' in os.environ:
             deployment = os.environ['DEPLOYMENT_STAGE']
             answer = input(f"Use deployment {deployment}? (y/n): ")

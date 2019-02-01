@@ -111,8 +111,7 @@ class AnalysisAgent:
             bundle_version (str): Optional, HCA DCP bundle version. By default, it's None.
 
         Returns:
-            Tuple[int, List[Workflow]]: A tuple of total count of workflows and the list of Workflow objects. E.g.
-                (100, [Workflow_1, ..., Workflow_100])
+            List[Workflow]: A list of Workflow objects. E.g. [Workflow_1, ..., Workflow_100]
 
         Raises:
             requests.exceptions.HTTPError: When the request to Secondary-analysis service (Cromwell) failed.
@@ -131,8 +130,7 @@ class AnalysisAgent:
         response.raise_for_status()
         result = response.json()
         all_workflows = [Workflow(wf) for wf in result['results']]
-        total_count = result['totalResultsCount']
-        return total_count, all_workflows
+        return all_workflows
 
     def query_by_project_uuid(self, project_uuid, with_labels=True):
         """Query the analysis workflows by the HCA DCP Ingest submission project-UUID, which is essentially one of the
@@ -149,8 +147,7 @@ class AnalysisAgent:
                 by default it's True
 
         Returns:
-            Tuple[int, List[Workflow]]: A tuple of total count of workflows and the list of Workflow objects. E.g.
-                (100, [Workflow_1, ..., Workflow_100])
+            List[Workflow]: A list of Workflow objects. E.g. [Workflow_1, ..., Workflow_100]
 
         Raises:
             requests.exceptions.HTTPError: When the request to Secondary-analysis service (Cromwell) failed.
@@ -167,5 +164,4 @@ class AnalysisAgent:
         response.raise_for_status()
         result = response.json()
         all_workflows = [Workflow(wf) for wf in result['results']]
-        total_count = result['totalResultsCount']
-        return total_count, all_workflows
+        return all_workflows

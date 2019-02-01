@@ -327,9 +327,9 @@ class AnalyzeSubmission:
 
         def _get_workflows_summary(self, analysis_agent):
             try:
-                total_count, workflows = analysis_agent.query_by_project_uuid(project_uuid=self.state.project_uuid,
+                workflows = analysis_agent.query_by_project_uuid(project_uuid=self.state.project_uuid,
                                                                               with_labels=False)
-                self.analysis_workflow_count = total_count
+                self.analysis_workflow_count = len(workflows)
 
                 # print the list of all workflows if the users want verbosity
                 if verbosity_level >= V_GOOD_DETAIL:

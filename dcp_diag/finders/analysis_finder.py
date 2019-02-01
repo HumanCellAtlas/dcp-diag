@@ -18,7 +18,7 @@ class AnalysisFinder:
         self.deployment = deployment
         # FIXME: Use a better way to authenticate instead of asking for service account JSON key
         # FIXME: If use OAuth, this should align with the Ingest Agent
-        self.service_account_key = args.get('service_account_key')
+        self.service_account_key = args.get('credentials')
         with AnalysisAgent.ignore_logging_msg():
             self.analysis = AnalysisAgent(deployment=self.deployment, service_account_key=self.service_account_key)
 
@@ -48,7 +48,7 @@ class AnalysisFinder:
         elif field_name == 'bundle_uuid':
             print(f"Searching for workflow(s) with Bundle {field_name}...")
             with self.analysis.ignore_logging_msg():
-                _, candidates = self.analysis.query_by_bundle(bundle_uuid=field_value)
+                candidates = self.analysis.query_by_bundle(bundle_uuid=field_value)
                 return candidates
 
         else:

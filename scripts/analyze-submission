@@ -90,7 +90,7 @@ class AnalyzeSubmission:
                         if v['type'] == 'primary' for wf_id, wf_body in v['analysis_workflows'].items()])
 
         @property
-        def running_analysis_workflow_count(self):
+        def ongoing_analysis_workflow_count(self):
             """Return the number of ongoing analysis workflows from bundle_map, if the map is empty, return 0."""
             return sum([wf_body['status'] not in ('Failed', 'Aborted', 'Succeeded')
                         for (k, v) in self.bundle_map.items() if v['type'] == 'primary'
@@ -300,10 +300,10 @@ class AnalyzeSubmission:
             self.analysis_workflow_count = self.state.analysis_workflow_count
             self.succeeded_analysis_workflow_count = self.state.succeeded_analysis_workflow_count
             self.failed_analysis_workflow_count = self.state.failed_analysis_workflow_count
-            self.running_analysis_workflow_count = self.state.running_analysis_workflow_count
+            self.ongoing_analysis_workflow_count = self.state.ongoing_analysis_workflow_count
             self.succeeded_workflows = set(self.state.iter_succeeded_analysis_workflows())
             self.failed_workflows = set([])
-            self.running_workflows = set([])
+            self.ongoing_workflows = set([])
             self.errors = set([])
             self.errors_count = 0
             self.remaining_analysis_workflows_summary = None
@@ -371,8 +371,8 @@ class AnalyzeSubmission:
                         self.failed_workflows.add(workflow_id)
                         self.failed_analysis_workflow_count += 1
                     else:
-                        self.running_workflows.add(workflow_id)
-                        self.running_analysis_workflow_count += 1
+                        self.ongoing_workflows.add(workflow_id)
+                        self.ongoing_analysis_workflow_count += 1
 
                 except requests.exceptions.HTTPError:
                     self.errors.add(workflow_id)
@@ -385,7 +385,7 @@ class AnalyzeSubmission:
 
             # TODO: make it print the workflow ids when user wants verbosity (V_GOOD_DETAIL)
             output(f"\r\tWorkflows are succeeded  : {self.succeeded_analysis_workflow_count}/{self.analysis_workflow_count}\n"
-                   f"\tWorkflows are in progress: {self.running_analysis_workflow_count}/{self.analysis_workflow_count}\n"
+                   f"\tWorkflows are in progress: {self.ongoing_analysis_workflow_count}/{self.analysis_workflow_count}\n"
                    f"\tWorkflows are failed     : {self.failed_analysis_workflow_count}/{self.analysis_workflow_count}\n")
             if self.errors:
                 # list the errors due to connection so user won't be confusing

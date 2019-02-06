@@ -89,7 +89,7 @@ logs
 ```
 or use `all`
 
-Permisions: you must be using AWS credentials (typically an AWS_PROFILE)
+**Permisions**: you must be using AWS credentials (typically an AWS_PROFILE)
 that has access to the Upload Service secrets in AWS SecretsManager.
 Most DCP developers has this level of access.
 
@@ -107,3 +107,52 @@ Show file, checksum records for a single file:
 Show validation, batch job records and job log:
 
     dcpdig @upload validation_id=<uuid> --show batch_jobs,logs
+
+#### Usage with the Data Processing Pipeline Service
+
+Use component `@analysis`.
+
+Expressions:
+
+```
+wf_uuid=<uuid>
+workflow_uuid=<uuid>
+bundle_uuid=<uuid>
+```
+
+Entities:
+
+```
+bundle/bundles
+project/projects
+```
+or use `all`
+
+**Permisions**: you must provide the path to the GCP service account JSON key
+that has access to the Data Processing Pipeline Service's workflow execution engines, otherwise the analysis commands will return `No auth information provided, skip checking Secondary Analysis for workflows.` to you. 
+
+Examples:
+
+Given a analysis workflow UUID from the integration environment, show associated primary bundle(s) and project(s), in a compact style:
+
+```bash
+dcpdig @analysis workflow_uuid=<uuid> -d integration --credentials=<path/to/gcp/service/account/key.json> --show bundles,projects
+```
+
+Given a analysis workflow UUID from the integration environment, show associated primary bundle(s) and project(s), in a verbose style:
+
+```bash
+dcpdig @analysis workflow_uuid=<uuid> -d integration --credentials=<path/to/gcp/service/account/key.json> -v -s all
+```
+
+Given a primary bundle UUID from the integration environment, show all of the workflows it triggered, with each workflow's associated primary bundle(s) and project(s), in a compact style:
+
+```bash
+dcpdig @analysis bundle_uuid=<uuid> -d integration --credentials=<path/to/gcp/service/account/key.json> --show bundles,projects
+```
+
+Given a primary bundle UUID from the integration environment, show all of the workflows it triggered, with each workflow's associated primary bundle(s) and project(s), in a verbose style:
+
+```bash
+dcpdig @analysis bundle_uuid=<uuid> -d integration --credentials=<path/to/gcp/service/account/key.json> -v -s all
+```

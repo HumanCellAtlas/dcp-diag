@@ -1,3 +1,10 @@
+# Changes for v1.0.0 (2019-02-06)
+Dcpdig can show batch jobs and their logs: dcpdig @upload validation_id=<uuid> --show batch_jobs,logs
+Dcpdig can show workflows: dcpdig @analysis bundle_uuid=<uuid> --show bundles,projects
+Use Ingest's HTTPS API endpoints.
+Compatible with Upload database v4.1.0.
+
+
 # Changes for v0.11.0 (2018-11-30)
 dcpdig: Allow project_uuid=<x> --show submissions AND bundles
 

@@ -1,5 +1,8 @@
 Data Coordination Platform Diagnostic Library and Tools
 =======================================================
+![Github](https://img.shields.io/badge/python-3.6-green.svg?style=for-the-badge&logo=python)
+![GitHub](https://img.shields.io/github/license/HumanCellAtlas/dcp-diag.svg?style=for-the-badge)
+![GitHub release](https://img.shields.io/github/tag/HumanCellAtlas/dcp-diag.svg?label=Latest%20Release&style=for-the-badge&colorB=green)
 
 This repository and Python package contains diagnostic tools and a
 library of code useful in building them.

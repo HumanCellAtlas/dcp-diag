@@ -16,6 +16,7 @@ from hca.util.pool import ThreadPool
 from dcp_diag.finders import Finder
 from dcp_diag.component_agents import DataStoreAgent
 from dcp_diag.component_agents import AnalysisAgent
+from dcp_diag.component_agents import AzulAgent
 
 
 V_SILENT = 0
@@ -468,6 +469,96 @@ class AnalyzeSubmission:
 
                 i += 1
 
+    class SearchAzulForPrimaryBundles:
+
+        def __init__(self, deployment, state, options):
+            self.deployment = deployment
+            self.state = state
+            self.options = options
+
+            self.primary_bundle_count = self.state.primary_bundle_count
+
+        def check(self):
+            output("\tCounting bundles in webservice", V_SUMMARY)
+            agent = AzulAgent(self.deployment)
+            project_bundle_fqids = agent.get_project_bundle_fqids(self.state.project_uuid)
+            for primary_bundle_uuid in self.state.iter_primary_bundles():
+                present_in_azul = primary_bundle_uuid in [fqid.split('.')[0] for fqid in project_bundle_fqids]
+                self.state.bundle_map[primary_bundle_uuid]['present_in_azul'] = present_in_azul
+            output("...done.\n", V_SUMMARY)
+
+        def print_results(self):
+            primary_bundles_indexed_by_project = {
+                k: v for (k, v) in self.state.bundle_map.items()
+                if v['type'] == 'primary'
+                   and v.get('present_in_azul')
+            }
+            primary_bundles_not_indexed_by_project = {
+                k: v for (k, v) in self.state.bundle_map.items()
+                if v['type'] == 'primary'
+                   and not v.get('present_in_azul')
+            }
+            output(f"\tIn Azul, {len(primary_bundles_indexed_by_project)} primary bundles are indexed\n", V_SUMMARY)
+            if verbosity_level >= V_GOOD_DETAIL:
+                for bundle_uuid, bundle_info in primary_bundles_indexed_by_project.items():
+                    print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
+
+            if len(primary_bundles_not_indexed_by_project) > 0:
+                output(f"\tIn Azul, {len(primary_bundles_not_indexed_by_project)} primary bundles are NOT indexed\n",
+                       V_SUMMARY)
+                if verbosity_level >= V_BAD_DETAIL:
+                    for bundle_uuid, bundle_info in primary_bundles_not_indexed_by_project.items():
+                        print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
+
+    class SearchAzulForSecondaryBundles:
+
+        def __init__(self, deployment, state, options):
+            self.deployment = deployment
+            self.state = state
+            self.options = options
+
+            self.primary_bundle_count = self.state.primary_bundle_count
+            self.azul_result_bundle_group_count = len([k for (k, v) in self.state.bundle_map.items()
+                                                       if len(v.get('azul_result_bundles', [])) > 0])
+
+        def check(self):
+            output("\tCounting secondary bundles in webservice", V_SUMMARY)
+            agent = AzulAgent(self.deployment)
+            project_bundle_fqids = agent.get_project_bundle_fqids(self.state.project_uuid)
+            for primary_bundle_uuid in self.state.iter_primary_bundles():
+                primary_bundle_state = self.state.bundle_map[primary_bundle_uuid]
+                primary_bundle_state['azul_result_bundles'] = []
+                for fqid in self.state.bundle_map[primary_bundle_uuid]['aws']['results_bundles']:
+                    if fqid in project_bundle_fqids and fqid not in primary_bundle_state.get('azul_result_bundles', []):
+                        primary_bundle_state['azul_result_bundles'].append(fqid)
+                        self.azul_result_bundle_group_count += 1
+                        self._print_progress()
+            output("...done.\n", V_SUMMARY)
+
+        def _print_progress(self):
+            if sys.stdout.isatty():
+                output(f"\r\tSearching for secondary bundles: "
+                       f"{self.azul_result_bundle_group_count}/{self.primary_bundle_count}", V_SUMMARY)
+
+        def print_results(self):
+            azul_result_bundles = {k: v['azul_result_bundles'] for (k, v) in self.state.bundle_map.items()}
+
+            i = 0
+            while len(azul_result_bundles) > 0:
+                pri_sec = {k: v for (k, v) in azul_result_bundles.items() if len(v) == i}
+                count = len(pri_sec)
+                if count > 0:
+                    output(f"\tIn Azul there are {count} primary bundles with {i} results bundles\n", V_SUMMARY)
+                    if i == 0 and verbosity_level >= V_BAD_DETAIL or i >= 1 and verbosity_level >= V_GOOD_DETAIL:
+                        for pri, sec in pri_sec.items():
+                            bundle_id = self.state.bundle_map[pri].get('fqid', pri)
+                            print(f"\t\tprimary: {bundle_id} secondary: {sec}")
+
+                for key in pri_sec.keys():
+                    del azul_result_bundles[key]
+
+                i += 1
+
     def __init__(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-d', '--deployment', help="search this deployment")
@@ -526,7 +617,17 @@ class AnalyzeSubmission:
         checker5.check()
         checker5.print_results()
 
-        output(f"\nPHASE 6: Save state:\n", V_SUMMARY)
+        output("\nPHASE 6: Check Azul for primary bundles:\n", V_SUMMARY)
+        checker6 = self.SearchAzulForPrimaryBundles(deployment=self.deployment, state=self.state, options=args)
+        checker6.check()
+        checker6.print_results()
+
+        output("\nPHASE 7: Check Azul for secondary bundles:\n", V_SUMMARY)
+        checker7 = self.SearchAzulForSecondaryBundles(deployment=self.deployment, state=self.state, options=args)
+        checker7.check()
+        checker7.print_results()
+
+        output(f"\nPHASE 8: Save state:\n", V_SUMMARY)
         self.state.save()
 
     def _choose_deployment(self, args):

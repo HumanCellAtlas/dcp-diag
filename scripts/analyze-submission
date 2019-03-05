@@ -518,8 +518,8 @@ class AnalyzeSubmission:
             self.options = options
 
             self.primary_bundle_count = self.state.primary_bundle_count
-            self.azul_result_bundle_group_count = len([k for (k, v) in self.state.bundle_map.items()
-                                                       if len(v.get('azul_result_bundles', [])) > 0])
+            self.checked_azul_bundles_count = len([k for (k, v) in self.state.bundle_map.items()
+                                                   if len(v.get('azul_result_bundles', [])) > 0])
 
         def check(self):
             output("\tCounting secondary bundles in webservice", V_SUMMARY)
@@ -527,18 +527,20 @@ class AnalyzeSubmission:
             project_bundle_fqids = agent.get_project_bundle_fqids(self.state.project_uuid)
             for primary_bundle_uuid in self.state.iter_primary_bundles():
                 primary_bundle_state = self.state.bundle_map[primary_bundle_uuid]
-                primary_bundle_state['azul_result_bundles'] = []
-                for fqid in self.state.bundle_map[primary_bundle_uuid]['aws']['results_bundles']:
-                    if fqid in project_bundle_fqids and fqid not in primary_bundle_state.get('azul_result_bundles', []):
-                        primary_bundle_state['azul_result_bundles'].append(fqid)
-                        self.azul_result_bundle_group_count += 1
-                        self._print_progress()
+                if 'azul_result_bundles' not in primary_bundle_state.keys() or \
+                        len(primary_bundle_state['azul_result_bundles']) == 0:
+                    primary_bundle_state['azul_result_bundles'] = []
+                    for fqid in self.state.bundle_map[primary_bundle_uuid]['aws']['results_bundles']:
+                        if fqid in project_bundle_fqids and fqid not in primary_bundle_state['azul_result_bundles']:
+                            primary_bundle_state['azul_result_bundles'].append(fqid)
+                    self.checked_azul_bundles_count += 1
+                self._print_progress()
             output("...done.\n", V_SUMMARY)
 
         def _print_progress(self):
             if sys.stdout.isatty():
                 output(f"\r\tSearching for secondary bundles: "
-                       f"{self.azul_result_bundle_group_count}/{self.primary_bundle_count}", V_SUMMARY)
+                       f"{self.checked_azul_bundles_count}/{self.primary_bundle_count}", V_SUMMARY)
 
         def print_results(self):
             azul_result_bundles = {k: v['azul_result_bundles'] for (k, v) in self.state.bundle_map.items()}

@@ -5,9 +5,9 @@ import requests
 
 class HateoasAgent:
 
-    def __init__(self, api_url_base, auth_headers={}):
+    def __init__(self, api_url_base):
         self.api_url_base = api_url_base
-        self.auth_headers = auth_headers
+        self.headers = {'Content-type': 'application/json'}
 
     """
     Get a collection resource.
@@ -49,7 +49,7 @@ class HateoasAgent:
         else:
             url = f"{self.api_url_base}{path_or_url}"
 
-        response = requests.get(url, headers=self.auth_headers)
+        response = requests.get(url, headers=self.headers)
 
         if response.ok:
             return response.json()

@@ -1,3 +1,7 @@
+# Changes for v1.0.1 (2019-04-02)
+Fix Ingest authentication error
+
+
 # Changes for v1.0.0 (2019-02-06)
 Dcpdig can show batch jobs and their logs: dcpdig @upload validation_id=<uuid> --show batch_jobs,logs
 Dcpdig can show workflows: dcpdig @analysis bundle_uuid=<uuid> --show bundles,projects

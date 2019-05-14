@@ -141,6 +141,41 @@ class AnalyzeSubmission:
             with open(self._state_filename, 'r') as fp:
                 self._raw_data = json.loads(fp.read())
 
+    class IngestSubmissionGrabber:
+
+        def __init__(self, deployment, state):
+            self.deployment = deployment
+            self.state = state
+
+        def get_submission_project_and_primary_bundle_list_from_ingest(self):
+            output("\tRetrieving submission...", V_SUMMARY)
+            finder = Finder.factory(finder_name="ingest", deployment=self.deployment)
+            submission = finder.find(f"subm_id={self.state.submission_id}")
+            output("done.\n", V_SUMMARY)
+            output(f"\tSubmission ID: {submission.envelope_id}\n", V_SUMMARY)
+
+            project = submission.project()
+            self.state.project_uuid = project.uuid
+            output(f"\tProject UUID: {self.state.project_uuid}\n", V_SUMMARY)
+
+            self._get_primary_bundle_list_from_ingest(submission)
+
+        def _get_primary_bundle_list_from_ingest(self, subm):
+            output("\tRetrieving submission's primary bundle list...", V_SUMMARY)
+
+            for pri_uuid in subm.bundles():
+                self.state.bundle_map[pri_uuid] = {
+                    'type': 'primary',
+                    'aws': {},
+                    'gcp': {}
+                }
+            output("done.\n", V_SUMMARY)
+
+            output(f"\tIngest created {self.state.primary_bundle_count} bundles.\n", V_SUMMARY)
+            if verbosity_level >= V_GOOD_DETAIL:
+                for bundle_uuid in sorted(self.state.bundle_map.keys()):
+                    print(f"\t{bundle_uuid}")
+
     class DSSBundlePresenceChecker:
 
         def __init__(self, deployment, state, options):
@@ -589,7 +624,8 @@ class AnalyzeSubmission:
             output(f"\tSecondary Analysis ran {self.state.analysis_workflow_count} analysis workflows.\n", V_SUMMARY)
         else:
             output("\nPHASE 1: Get submission primary bundle list from Ingest:\n", V_SUMMARY)
-            self._get_submission_project_and_primary_bundle_list_from_ingest()
+            checker1 = self.IngestSubmissionGrabber(deployment=self.deployment, state=self.state)
+            checker1.get_submission_project_and_primary_bundle_list_from_ingest()
             self.state.save()
 
         output("\nPHASE 2: Checking bundles are present in DSS:\n", V_SUMMARY)
@@ -647,35 +683,6 @@ class AnalyzeSubmission:
             sys.exit(1)
         output(f"Using deployment: {deployment}\n", V_SUMMARY)
         return deployment
-
-    def _get_submission_project_and_primary_bundle_list_from_ingest(self):
-        output("\tRetrieving submission...", V_SUMMARY)
-        finder = Finder.factory(finder_name="ingest", deployment=self.deployment)
-        submission = finder.find(f"subm_id={self.state.submission_id}")
-        output("done.\n", V_SUMMARY)
-        output(f"\tSubmission ID: {submission.envelope_id}\n", V_SUMMARY)
-
-        project = submission.project()
-        self.state.project_uuid = project.uuid
-        output(f"\tProject UUID: {self.state.project_uuid}\n", V_SUMMARY)
-
-        self._get_primary_bundle_list_from_ingest(submission)
-
-    def _get_primary_bundle_list_from_ingest(self, subm):
-        output("\tRetrieving submission's primary bundle list...", V_SUMMARY)
-
-        for pri_uuid in subm.bundles():
-            self.state.bundle_map[pri_uuid] = {
-                'type': 'primary',
-                'aws': {},
-                'gcp': {}
-            }
-        output("done.\n", V_SUMMARY)
-
-        output(f"\tIngest created {self.state.primary_bundle_count} bundles.\n", V_SUMMARY)
-        if verbosity_level >= V_GOOD_DETAIL:
-            for bundle_uuid in sorted(self.state.bundle_map.keys()):
-                print(f"\t{bundle_uuid}")
 
 
 AnalyzeSubmission()

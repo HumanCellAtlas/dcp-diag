@@ -1,3 +1,10 @@
+# Changes for v1.1.0 (2019-05-15)
+analyze-submission:
+ - count extra bundles returned by a project UUID search in DSS
+ - sort bundle lists when printing
+ - save state after every phase
+ - save state on Ctrl-C
+
 # Changes for v1.0.1 (2019-04-02)
 Fix Ingest authentication error
 

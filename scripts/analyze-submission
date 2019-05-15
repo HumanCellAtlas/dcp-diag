@@ -3,8 +3,10 @@
 import argparse
 import json
 import os
+import signal
 import sys
 from threading import Lock
+
 import requests
 
 if __name__ == '__main__':  # noqa
@@ -199,7 +201,7 @@ class AnalyzeSubmission:
                         if replica_data['dss_presence']:
                             continue
                     else:
-                        replica_data['dss_presence'] = {}
+                        replica_data['dss_presence'] = None
                     # self._check_bundle_manifest_exists(bundle_uuid, replica)
                     pool.add_task(self._check_bundle_manifest_exists, bundle_uuid, replica)
             pool.wait_for_completion()
@@ -621,12 +623,19 @@ class AnalyzeSubmission:
             output(f"\tSubmission ID: {self.state.submission_id}\n", V_SUMMARY)
             output(f"\tProject UUID: {self.state.project_uuid}\n", V_SUMMARY)
             output(f"\tIngest created {self.state.primary_bundle_count} bundles.\n", V_SUMMARY)
-            output(f"\tSecondary Analysis ran {self.state.analysis_workflow_count} analysis workflows.\n", V_SUMMARY)
+            try:
+                output(f"\tSecondary Analysis ran {self.state.analysis_workflow_count} analysis workflows.\n",
+                       V_SUMMARY)
+            except KeyError:
+                pass
         else:
             output("\nPHASE 1: Get submission primary bundle list from Ingest:\n", V_SUMMARY)
             checker1 = self.IngestSubmissionGrabber(deployment=self.deployment, state=self.state)
             checker1.get_submission_project_and_primary_bundle_list_from_ingest()
             self.state.save()
+
+        # From now on we have data worth saving on Ctrl-C
+        signal.signal(signal.SIGINT, self._save_on_signal)
 
         output("\nPHASE 2: Checking bundles are present in DSS:\n", V_SUMMARY)
         checker2 = self.DSSBundlePresenceChecker(self.deployment, self.state, options=args)
@@ -683,6 +692,11 @@ class AnalyzeSubmission:
             sys.exit(1)
         output(f"Using deployment: {deployment}\n", V_SUMMARY)
         return deployment
+
+    def _save_on_signal(self, sig, frame):
+        print("\n")
+        self.state.save()
+        exit(0)
 
 
 AnalyzeSubmission()

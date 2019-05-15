@@ -55,6 +55,34 @@ class AnalyzeSubmission:
 
     class AnalysisState:
 
+        """
+        bundle_map holds a map of gathered bundle information:
+
+        "<uuid>": {
+            "type": "primary",
+            "aws": {
+                "dss_presence": bool,
+                "in_dss_project_search": bool,
+                "results_bundles": [
+                    "<uuid>.<version>"
+                ]
+            },
+            "gcp": {
+                "dss_presence": bool,
+                "in_dss_project_search": bool
+                "results_bundles": [
+                    "<uuid>.<version>"
+                ]
+            },
+            "fqid": "<uuid>.<timestamp>",
+            "analysis_workflows": {},
+            "present_in_azul": bool,
+            "azul_result_bundles": [
+                "<uuid>.<version>"
+            ]
+        },
+        """
+
         SAVEFILE_SCHEMA_VERSION = 1
 
         def __init__(self, submission_id):
@@ -234,10 +262,10 @@ class AnalyzeSubmission:
         def print_results(self):
             for replica in ['aws', 'gcp']:
                 present_bundles = {
-                    k: v for (k, v) in self.state.bundle_map.items() if v[replica]['dss_presence']
+                    k: v for (k, v) in self.state.bundle_map.items() if v[replica].get('dss_presence')
                 }
                 absent_bundles = {
-                    k: v for (k, v) in self.state.bundle_map.items() if not v[replica]['dss_presence']
+                    k: v for (k, v) in self.state.bundle_map.items() if not v[replica].get('dss_presence')
                 }
                 output(f"\t{len(present_bundles)} bundle are present in {replica.upper()}\n", V_SUMMARY)
                 if len(present_bundles) > 0 and verbosity_level >= V_GOOD_DETAIL:
@@ -256,7 +284,6 @@ class AnalyzeSubmission:
             self.options = options
 
         def check(self):
-            # TODO: consider the possibility the search returns MORE bundles than Ingest knows about
             output("\tSearching DSS...", V_SUMMARY)
             dss = DataStoreAgent(self.deployment)
             query = {
@@ -286,8 +313,18 @@ class AnalyzeSubmission:
                     with self.state.lock:
                         bundle_components = result['bundle_fqid'].split('.', 1)
                         bundle_uuid = bundle_components[0]
-                        # TODO if we don't know about this bundle at all, create a new entry in bundle_map
-                        bundle_info = self.state.bundle_map[bundle_uuid]
+
+                        if bundle_uuid in self.state.bundle_map:
+                            bundle_info = self.state.bundle_map[bundle_uuid]
+                        else:
+                            # Extra bundle that Ingest does not know about
+                            bundle_info = {
+                                'type': 'extra',
+                                'aws': {},
+                                'gcp': {}
+                            }
+                            self.state.bundle_map[bundle_uuid] = bundle_info
+
                         bundle_info[replica]['in_dss_project_search'] = True
                         if 'fqid' not in bundle_info:
                             bundle_info['fqid'] = result['bundle_fqid']
@@ -310,6 +347,11 @@ class AnalyzeSubmission:
                 if v['type'] == 'primary'
                 and not v[replica].get('in_dss_project_search')
             }
+            extra_bundles_indexed_by_project = {
+                k: v for (k, v) in self.state.bundle_map.items()
+                if v['type'] == 'extra'
+                and v[replica].get('in_dss_project_search')
+            }
             output(f"\tIn {replica.upper()} DSS, "
                    f"{len(primary_bundles_indexed_by_project)} primary bundles are indexed by project\n", V_SUMMARY)
             if verbosity_level >= V_GOOD_DETAIL:
@@ -323,6 +365,15 @@ class AnalyzeSubmission:
                     V_SUMMARY)
                 if verbosity_level >= V_BAD_DETAIL:
                     for bundle_uuid, bundle_info in primary_bundles_not_indexed_by_project.items():
+                        print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
+
+            if len(extra_bundles_indexed_by_project) > 0:
+                output(
+                    f"\tIn {replica.upper()} DSS, "
+                    f"{len(extra_bundles_indexed_by_project)} extra bundles are associated with this project\n",
+                    V_SUMMARY)
+                if verbosity_level >= V_BAD_DETAIL:
+                    for bundle_uuid, bundle_info in extra_bundles_indexed_by_project.items():
                         print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
 
     class SearchAnalysisWorkflowsbyProjectUUID:
@@ -487,7 +538,11 @@ class AnalyzeSubmission:
             self._print_results_for_replica('gcp')
 
         def _print_results_for_replica(self, replica):
-            replica_results = {k: v[replica]['results_bundles'] for (k, v) in self.state.bundle_map.items()}
+            replica_results = {
+                k: v[replica].get('results_bundles')
+                for (k, v) in self.state.bundle_map.items()
+                if v['type'] == 'primary'
+            }
 
             i = 0
             while len(replica_results) > 0:
@@ -516,13 +571,13 @@ class AnalyzeSubmission:
             self.primary_bundle_count = self.state.primary_bundle_count
 
         def check(self):
-            output("\tCounting bundles in webservice", V_SUMMARY)
+            output("\tCounting bundles in webservice...", V_SUMMARY)
             agent = AzulAgent(self.deployment)
             project_bundle_fqids = agent.get_project_bundle_fqids(self.state.project_uuid)
             for primary_bundle_uuid in self.state.iter_primary_bundles():
                 present_in_azul = primary_bundle_uuid in [fqid.split('.')[0] for fqid in project_bundle_fqids]
                 self.state.bundle_map[primary_bundle_uuid]['present_in_azul'] = present_in_azul
-            output("...done.\n", V_SUMMARY)
+            output("done.\n", V_SUMMARY)
 
         def print_results(self):
             primary_bundles_indexed_by_project = {
@@ -559,7 +614,7 @@ class AnalyzeSubmission:
                                                        if len(v.get('azul_result_bundles', [])) > 0])
 
         def check(self):
-            output("\tCounting secondary bundles in webservice", V_SUMMARY)
+            output("\tCounting secondary bundles in webservice...", V_SUMMARY)
             agent = AzulAgent(self.deployment)
             project_bundle_fqids = agent.get_project_bundle_fqids(self.state.project_uuid)
             for primary_bundle_uuid in self.state.iter_primary_bundles():
@@ -570,7 +625,7 @@ class AnalyzeSubmission:
                         primary_bundle_state['azul_result_bundles'].append(fqid)
                         self.azul_result_bundle_group_count += 1
                         self._print_progress()
-            output("...done.\n", V_SUMMARY)
+            output("done.\n", V_SUMMARY)
 
         def _print_progress(self):
             if sys.stdout.isatty():
@@ -578,7 +633,11 @@ class AnalyzeSubmission:
                        f"{self.azul_result_bundle_group_count}/{self.primary_bundle_count}", V_SUMMARY)
 
         def print_results(self):
-            azul_result_bundles = {k: v['azul_result_bundles'] for (k, v) in self.state.bundle_map.items()}
+            azul_result_bundles = {
+                k: v['azul_result_bundles']
+                for (k, v) in self.state.bundle_map.items()
+                if v['type'] == 'primary'
+            }
 
             i = 0
             while len(azul_result_bundles) > 0:

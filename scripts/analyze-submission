@@ -226,32 +226,32 @@ class AnalyzeSubmission:
             pool = ThreadPool(self.options.jobs)
             for bundle_uuid, bundle_info in self.state.iter_bundles('primary'):
                 for replica in ['aws', 'gcp']:
-                    replica_data = self.state.bundle_map[bundle_uuid][replica]
+                    replica_data = bundle_info[replica]
                     if 'dss_presence' in replica_data:
                         if replica_data['dss_presence']:
                             continue
                     else:
                         replica_data['dss_presence'] = None
-                    # self._check_bundle_manifest_exists(bundle_uuid, replica)
-                    pool.add_task(self._check_bundle_manifest_exists, bundle_uuid, replica)
+                    # self._check_bundle_manifest_exists(bundle_uuid, replica)  # single threaded
+                    pool.add_task(self._check_bundle_manifest_exists, bundle_uuid, replica)  # multi-threaded
             pool.wait_for_completion()
             output("...done.\n", V_SUMMARY)
 
         def _check_bundle_manifest_exists(self, bundle_uuid, replica):
             dss = DataStoreAgent(self.deployment)
+            bundle_info = self.state.bundle_map[bundle_uuid]
             try:
                 manifest = dss.bundle_manifest(bundle_uuid, replica)
                 with self.state.lock:
-                    bundle_info = self.state.bundle_map[bundle_uuid]
                     bundle_info['fqid'] = ".".join([manifest['bundle']['uuid'], manifest['bundle']['version']])
                     bundle_info[replica]['dss_presence'] = True
             except AssertionError as e:
                 with self.state.lock:
-                    self.state.bundle_map[bundle_uuid][replica]['dss_presence'] = False
+                    bundle_info[replica]['dss_presence'] = False
                     output(f"\rbundle {bundle_uuid} is missing from {replica.upper()}\n", V_BAD_DETAIL)
             with self.state.lock:
                 # create entry for analysis workflows at the same time
-                self.state.bundle_map[bundle_uuid]['analysis_workflows'] = {}
+                bundle_info['analysis_workflows'] = {}
             self.checked_bundles[replica] += 1
             self._print_progress()
 
@@ -416,7 +416,7 @@ class AnalyzeSubmission:
         def _get_workflows_summary(self, analysis_agent):
             try:
                 workflows = analysis_agent.query_by_project_uuid(project_uuid=self.state.project_uuid,
-                                                                              with_labels=False)
+                                                                 with_labels=False)
                 self.analysis_workflow_count = len(workflows)
 
                 # print the list of all workflows if the users want verbosity

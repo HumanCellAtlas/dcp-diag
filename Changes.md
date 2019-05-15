@@ -1,3 +1,6 @@
+# Changes for v1.1.1 (2019-05-15)
+analyze-submission: update elasticsearch primary bundle search
+
 # Changes for v1.1.0 (2019-05-15)
 analyze-submission:
  - count extra bundles returned by a project UUID search in DSS

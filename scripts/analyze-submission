@@ -271,12 +271,14 @@ class AnalyzeSubmission:
                 }
                 output(f"\t{len(present_bundles)} bundle are present in {replica.upper()}\n", V_SUMMARY)
                 if len(present_bundles) > 0 and verbosity_level >= V_GOOD_DETAIL:
-                        for uuid, bundle_info in present_bundles.items():
-                            print(f"\t{bundle_info.get('fqid', uuid)}")
+                    for uuid in sorted(present_bundles.keys()):
+                        info = present_bundles[uuid]
+                        print(f"\t{info.get('fqid', uuid)}")
                 if len(absent_bundles) > 0 and verbosity_level >= V_BAD_DETAIL:
                         output(f"\t{len(absent_bundles)} bundle is absent from {replica.upper()}\n", V_SUMMARY)
-                        for uuid, bundle_info in absent_bundles.items():
-                            print(f"\t{bundle_info.get('fqid', uuid)}")
+                        for uuid in sorted(absent_bundles.keys()):
+                            info = absent_bundles[uuid]
+                            print(f"\t{info.get('fqid', uuid)}")
 
     class SearchDSSbyProjectUUID:
 
@@ -351,8 +353,9 @@ class AnalyzeSubmission:
             output(f"\tIn {replica.upper()} DSS, "
                    f"{len(primary_bundles_indexed_by_project)} primary bundles are indexed by project\n", V_SUMMARY)
             if verbosity_level >= V_GOOD_DETAIL:
-                for bundle_uuid, bundle_info in primary_bundles_indexed_by_project.items():
-                    print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
+                for uuid in sorted(primary_bundles_indexed_by_project.keys()):
+                    info = primary_bundles_indexed_by_project[uuid]
+                    print(f"\t{info.get('fqid', uuid)}")
 
             if len(primary_bundles_not_indexed_by_project) > 0:
                 output(
@@ -542,9 +545,9 @@ class AnalyzeSubmission:
                     output(f"\tIn {replica.upper()} there are {count} primary bundles with {i} results bundles\n",
                            V_SUMMARY)
                     if i == 0 and verbosity_level >= V_BAD_DETAIL or i >= 1 and verbosity_level >= V_GOOD_DETAIL:
-                        for pri, sec in pri_sec.items():
-                            bundle_id = self.state.bundle_map[pri].get('fqid', pri)
-                            print(f"\t\tprimary: {bundle_id} secondary: {sec}")
+                        for pri in sorted(pri_sec.keys()):
+                            bundle_fqid = self.state.bundle_map[pri].get('fqid', pri)
+                            print(f"\t\tprimary: {bundle_fqid} secondary: {pri_sec[pri]}")
 
                 for key in pri_sec.keys():
                     del replica_results[key]
@@ -578,14 +581,16 @@ class AnalyzeSubmission:
             }
             output(f"\tIn Azul, {len(primary_bundles_indexed_by_project)} primary bundles are indexed\n", V_SUMMARY)
             if verbosity_level >= V_GOOD_DETAIL:
-                for bundle_uuid, bundle_info in primary_bundles_indexed_by_project.items():
+                for bundle_uuid in sorted(primary_bundles_indexed_by_project.keys()):
+                    bundle_info = primary_bundles_indexed_by_project[bundle_uuid]
                     print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
 
             if len(primary_bundles_not_indexed_by_project) > 0:
                 output(f"\tIn Azul, {len(primary_bundles_not_indexed_by_project)} primary bundles are NOT indexed\n",
                        V_SUMMARY)
                 if verbosity_level >= V_BAD_DETAIL:
-                    for bundle_uuid, bundle_info in primary_bundles_not_indexed_by_project.items():
+                    for bundle_uuid in sorted(primary_bundles_not_indexed_by_project.keys()):
+                        bundle_info = primary_bundles_indexed_by_project[bundle_uuid]
                         print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
 
     class SearchAzulForSecondaryBundles:
@@ -627,9 +632,9 @@ class AnalyzeSubmission:
                 if count > 0:
                     output(f"\tIn Azul there are {count} primary bundles with {i} results bundles\n", V_SUMMARY)
                     if i == 0 and verbosity_level >= V_BAD_DETAIL or i >= 1 and verbosity_level >= V_GOOD_DETAIL:
-                        for pri, sec in pri_sec.items():
-                            bundle_id = self.state.bundle_map[pri].get('fqid', pri)
-                            print(f"\t\tprimary: {bundle_id} secondary: {sec}")
+                        for pri in sorted(pri_sec.keys()):
+                            bundle_fqid = self.state.bundle_map[pri].get('fqid', pri)
+                            print(f"\t\tprimary: {bundle_fqid} secondary: {pri_sec[pri]}")
 
                 for key in pri_sec.keys():
                     del azul_result_bundles[key]

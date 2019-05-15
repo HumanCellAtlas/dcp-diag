@@ -303,7 +303,7 @@ class AnalyzeSubmission:
                         "must_not": [
                             {
                                 "match": {
-                                    "files.analysis_process_json.process_type.text": "analysis"
+                                    "files.analysis_process_json.type.text": "analysis"
                                 }
                             }
                         ]

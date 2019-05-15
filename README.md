@@ -11,6 +11,70 @@ library of code useful in building them.
 
     pip install dcp-diag
 
+## Analyze-submission
+
+`analyze-submission` is a tool to allow data wrangers to examine the
+progress of a submission through the DCP.  Please don't use it unless
+you're a data wranger - it can be very API-call intensive.
+
+It will check the submission envelope, primary and secondary bundle
+manifests in the DSS, project search results in the DSS, Secondary
+Analysis workflows (if you have credentials to allow that) and Azul
+search results.
+
+### Usage
+
+```
+analyze-submission --deployment="<deployment>" <submission-id>
+```
+
+* The default level of output is a summary only.
+* Adding `--verbose` or `-v` will show UUIDs of problem entities (bundles/workflows).
+* Adding a second level `-vv` will show UUIDs of all entities found.
+
+`analyze-submission` caches results in a (human readable)
+`<submission-id>.json` file, and is restartable.  It is built this way
+as it can take a long time to run for large submissions, and as such can
+be victim to network and API faulures.
+If you wish to clear the cache for a particular
+submission and get all fresh data, add option `--fresh`.
+
+### Example Output
+
+```
+analyze-submission -d prod 1234567890abcdef12345678 --credentials=creds.json
+
+Using deployment: prod
+
+PHASE 1: Get submission primary bundle list from Ingest:
+	Submission ID: 1234567890abcdef12345678
+	Project UUID: 11111111-2222-3333-4444-555555555555
+	Ingest created 6 bundles.
+
+PHASE 2: Checking bundles are present in DSS:
+	6 bundle are present in AWS
+	6 bundle are present in GCP
+
+PHASE 3: Check DSS for primary bundles with this project UUID:
+	In AWS DSS, 6 primary bundles are indexed by project
+	In GCP DSS, 6 primary bundles are indexed by project
+
+PHASE 4: Check Secondary Analysis for workflows with this project UUID:
+	Workflows are succeeded  : 6/6
+	Workflows are in progress: 0/6
+	Workflows are failed     : 0/6
+
+PHASE 5: Check DSS for secondary bundles:
+	In AWS there are 6 primary bundles with 1 results bundles
+	In GCP there are 6 primary bundles with 1 results bundles
+
+PHASE 6: Check Azul for primary bundles:
+	In Azul, 6 primary bundles are indexed
+
+PHASE 7: Check Azul for secondary bundles:
+	In Azul there are 6 primary bundles with 1 results bundles
+```
+
 ## Dcpdig
 
 `dcpdig` is a CLI tool to allow to interrogate DCP APIs and
@@ -132,7 +196,7 @@ project/projects
 or use `all`
 
 **Permisions**: you must provide the path to the GCP service account JSON key
-that has access to the Data Processing Pipeline Service's workflow execution engines, otherwise the analysis commands will return `No auth information provided, skip checking Secondary Analysis for workflows.` to you. 
+that has access to the Data Processing Pipeline Service's workflow execution engines, otherwise the analysis commands will return `No auth information provided, skip checking Secondary Analysis for workflows.` to you.
 
 Examples:
 
@@ -159,3 +223,5 @@ Given a primary bundle UUID from the integration environment, show all of the wo
 ```bash
 dcpdig @analysis bundle_uuid=<uuid> -d integration --credentials=<path/to/gcp/service/account/key.json> -v -s all
 ```
+
+## Contributing

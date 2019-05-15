@@ -21,15 +21,22 @@ from dcp_diag.component_agents import AnalysisAgent
 from dcp_diag.component_agents import AzulAgent
 
 
-V_SILENT = 0
-V_SUMMARY = 1
-V_BAD_DETAIL = 2
-V_GOOD_DETAIL = 3
+VERBOSITY_MASK = 0x0f
+V_SILENT = 0x00
+V_SUMMARY = 0x01
+V_BAD_DETAIL = 0x02
+V_GOOD_DETAIL = 0x03
+
+V_TTY_ONLY = 0x10
 
 verbosity_level = V_SUMMARY
 
 
-def output(message, message_verbosity=V_SILENT):
+def output(message, verbosity=V_SILENT):
+    if verbosity & V_TTY_ONLY and not sys.stdout.isatty():
+        return
+
+    message_verbosity = verbosity & VERBOSITY_MASK
     if message_verbosity <= verbosity_level:
         sys.stdout.write(message)
         sys.stdout.flush()
@@ -148,7 +155,7 @@ class AnalyzeSubmission:
             return 'version' in self._raw_data and self._raw_data['version'] == self.SAVEFILE_SCHEMA_VERSION
 
         def save(self):
-            output(f"\tSaving state in {self._state_filename}...", V_SUMMARY)
+            output(f"\tSaving state in {self._state_filename}...", V_SUMMARY | V_TTY_ONLY)
             with open(self._state_filename, 'w') as fp:
                 data = {
                     'version': self.SAVEFILE_SCHEMA_VERSION,
@@ -157,7 +164,7 @@ class AnalyzeSubmission:
                     'bundle_map': self.bundle_map
                 }
                 fp.write(json.dumps(data, indent=4))
-            output("done.\n", V_SUMMARY)
+            output("done.\n", V_SUMMARY | V_TTY_ONLY)
 
         def load(self):
             output(f"\tLoading state from {self._state_filename}...", V_SUMMARY)
@@ -180,10 +187,10 @@ class AnalyzeSubmission:
             self.state = state
 
         def get_submission_project_and_primary_bundle_list_from_ingest(self):
-            output("\tRetrieving submission...", V_SUMMARY)
+            output("\tRetrieving submission...", V_SUMMARY | V_TTY_ONLY)
             finder = Finder.factory(finder_name="ingest", deployment=self.deployment)
             submission = finder.find(f"subm_id={self.state.submission_id}")
-            output("done.\n", V_SUMMARY)
+            output("done.\n", V_SUMMARY | V_TTY_ONLY)
             output(f"\tSubmission ID: {submission.envelope_id}\n", V_SUMMARY)
 
             project = submission.project()
@@ -193,7 +200,7 @@ class AnalyzeSubmission:
             self._get_primary_bundle_list_from_ingest(submission)
 
         def _get_primary_bundle_list_from_ingest(self, subm):
-            output("\tRetrieving submission's primary bundle list...", V_SUMMARY)
+            output("\tRetrieving submission's primary bundle list...", V_SUMMARY | V_TTY_ONLY)
 
             for pri_uuid in subm.bundles():
                 self.state.bundle_map[pri_uuid] = {
@@ -201,12 +208,12 @@ class AnalyzeSubmission:
                     'aws': {},
                     'gcp': {}
                 }
-            output("done.\n", V_SUMMARY)
+            output("done.\n", V_SUMMARY | V_TTY_ONLY)
 
             output(f"\tIngest created {self.state.primary_bundle_count} bundles.\n", V_SUMMARY)
             if verbosity_level >= V_GOOD_DETAIL:
                 for bundle_uuid in sorted([uuid for uuid, info in self.state.iter_bundles('primary')]):
-                    print(f"\t{bundle_uuid}")
+                    print(f"\t    {bundle_uuid}")
 
     class DSSBundlePresenceChecker:
 
@@ -222,7 +229,7 @@ class AnalyzeSubmission:
             }
 
         def check(self):
-            output("\tChecking for bundle manifests:", V_SUMMARY)
+            output("\tChecking for bundle manifests:", V_SUMMARY | V_TTY_ONLY)
             pool = ThreadPool(self.options.jobs)
             for bundle_uuid, bundle_info in self.state.iter_bundles('primary'):
                 for replica in ['aws', 'gcp']:
@@ -235,7 +242,7 @@ class AnalyzeSubmission:
                     # self._check_bundle_manifest_exists(bundle_uuid, replica)  # single threaded
                     pool.add_task(self._check_bundle_manifest_exists, bundle_uuid, replica)  # multi-threaded
             pool.wait_for_completion()
-            output("...done.\n", V_SUMMARY)
+            output("...done.\n", V_SUMMARY | V_TTY_ONLY)
 
         def _check_bundle_manifest_exists(self, bundle_uuid, replica):
             dss = DataStoreAgent(self.deployment)
@@ -256,10 +263,9 @@ class AnalyzeSubmission:
             self._print_progress()
 
         def _print_progress(self):
-            if sys.stdout.isatty():
-                output(f"\r\tChecking for bundle manifests: "
-                       f"AWS: {self.checked_bundles['aws']}/{self.primary_bundle_count}"
-                       f" GCP: {self.checked_bundles['gcp']}/{self.primary_bundle_count}", V_SUMMARY)
+            output(f"\r\tChecking for bundle manifests: "
+                   f"AWS: {self.checked_bundles['aws']}/{self.primary_bundle_count}"
+                   f" GCP: {self.checked_bundles['gcp']}/{self.primary_bundle_count}", V_SUMMARY | V_TTY_ONLY)
 
         def print_results(self):
             for replica in ['aws', 'gcp']:
@@ -273,12 +279,12 @@ class AnalyzeSubmission:
                 if len(present_bundles) > 0 and verbosity_level >= V_GOOD_DETAIL:
                     for uuid in sorted(present_bundles.keys()):
                         info = present_bundles[uuid]
-                        print(f"\t{info.get('fqid', uuid)}")
+                        print(f"\t    {info.get('fqid', uuid)}")
                 if len(absent_bundles) > 0 and verbosity_level >= V_BAD_DETAIL:
                         output(f"\t{len(absent_bundles)} bundle is absent from {replica.upper()}\n", V_SUMMARY)
                         for uuid in sorted(absent_bundles.keys()):
                             info = absent_bundles[uuid]
-                            print(f"\t{info.get('fqid', uuid)}")
+                            print(f"\t    {info.get('fqid', uuid)}")
 
     class SearchDSSbyProjectUUID:
 
@@ -288,7 +294,7 @@ class AnalyzeSubmission:
             self.options = options
 
         def check(self):
-            output("\tSearching DSS...", V_SUMMARY)
+            output("\tSearching DSS...", V_SUMMARY | V_TTY_ONLY)
             dss = DataStoreAgent(self.deployment)
             query = {
                 "query": {
@@ -334,7 +340,7 @@ class AnalyzeSubmission:
                             bundle_info['fqid'] = result['bundle_fqid']
                         else:
                             assert(bundle_info['fqid'] == result['bundle_fqid'])
-            output("done.\n", V_SUMMARY)
+            output("done.\n", V_SUMMARY | V_TTY_ONLY)
 
         def print_results(self):
             for replica in ['aws', 'gcp']:
@@ -355,7 +361,7 @@ class AnalyzeSubmission:
             if verbosity_level >= V_GOOD_DETAIL:
                 for uuid in sorted(primary_bundles_indexed_by_project.keys()):
                     info = primary_bundles_indexed_by_project[uuid]
-                    print(f"\t{info.get('fqid', uuid)}")
+                    print(f"\t    {info.get('fqid', uuid)}")
 
             if len(primary_bundles_not_indexed_by_project) > 0:
                 output(
@@ -364,7 +370,7 @@ class AnalyzeSubmission:
                     V_SUMMARY)
                 if verbosity_level >= V_BAD_DETAIL:
                     for bundle_uuid, bundle_info in primary_bundles_not_indexed_by_project.items():
-                        print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
+                        print(f"\t    {bundle_info.get('fqid', bundle_uuid)}")
 
             if len(extra_bundles_indexed_by_project) > 0:
                 output(
@@ -373,7 +379,7 @@ class AnalyzeSubmission:
                     V_SUMMARY)
                 if verbosity_level >= V_BAD_DETAIL:
                     for bundle_uuid, bundle_info in extra_bundles_indexed_by_project.items():
-                        print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
+                        print(f"\t    {bundle_info.get('fqid', bundle_uuid)}")
 
     class SearchAnalysisWorkflowsbyProjectUUID:
 
@@ -398,7 +404,7 @@ class AnalyzeSubmission:
 
         def check(self):
             # TODO: this method is a very slow synchronous loop, speed up by using multi-threading with the options.jobs
-            output("\tSearching for secondary analysis workflows: ", V_SUMMARY)
+            output("\tSearching for secondary analysis workflows:\n", V_SUMMARY | V_TTY_ONLY)
             analysis = AnalysisAgent(deployment=self.deployment,
                                      service_account_key=self.service_account_key)
 
@@ -411,7 +417,7 @@ class AnalyzeSubmission:
 
                 self._get_workflows_detailed_info(analysis_agent=analysis)
 
-            output("...done.\n", V_SUMMARY)
+            output("...done.\n", V_SUMMARY | V_TTY_ONLY)
 
         def _get_workflows_summary(self, analysis_agent):
             try:
@@ -419,10 +425,8 @@ class AnalyzeSubmission:
                                                                  with_labels=False)
                 self.analysis_workflow_count = len(workflows)
 
-                # print the list of all workflows if the users want verbosity
-                if verbosity_level >= V_GOOD_DETAIL:
-                    for workflow in workflows:
-                        print(f"\t{workflow.uuid}")
+                for workflow in workflows:
+                    output(f"\t    {workflow.uuid}\n", V_GOOD_DETAIL)
 
                 return set([workflow.uuid for workflow in workflows])
 
@@ -435,7 +439,7 @@ class AnalyzeSubmission:
 
             for idx, workflow_id in enumerate(remaining_work):
                 output("\r\tSearching for secondary analysis workflows: "
-                       f"{idx + 1 + finished_work_count}/{self.analysis_workflow_count}", V_SUMMARY)
+                       f"{idx + 1 + finished_work_count}/{self.analysis_workflow_count}", V_SUMMARY | V_TTY_ONLY)
 
                 try:
                     detailed_workflow = analysis_agent.query_by_workflow_uuid(uuid=workflow_id)
@@ -493,7 +497,7 @@ class AnalyzeSubmission:
             }
 
         def check(self):
-            output("\tSearching for secondary bundles: ", V_SUMMARY)
+            output("\tSearching for secondary bundles: ", V_SUMMARY | V_TTY_ONLY)
             pool = ThreadPool(self.options.jobs)
             for pri_uuid, bundle_info in self.state.iter_bundles('primary'):
                 for replica in ['aws', 'gcp']:
@@ -505,7 +509,7 @@ class AnalyzeSubmission:
                         replica_data['results_bundles'] = []
                     pool.add_task(self._find_secondary_bundles_for_primary_bundle, pri_uuid, replica)
             pool.wait_for_completion()
-            output("...done.\n", V_SUMMARY)
+            output("...done.\n", V_SUMMARY | V_TTY_ONLY)
 
         def _find_secondary_bundles_for_primary_bundle(self, pri_uuid, replica):
             dss = DataStoreAgent(self.deployment)
@@ -525,10 +529,9 @@ class AnalyzeSubmission:
             self._print_progress()
 
         def _print_progress(self):
-            if sys.stdout.isatty():
-                output(f"\r\tSearching for secondary bundles: "
-                       f"AWS: {self.checked_bundles['aws']}/{self.primary_bundle_count}"
-                       f" GCP: {self.checked_bundles['gcp']}/{self.primary_bundle_count}", V_SUMMARY)
+            output(f"\r\tSearching for secondary bundles: "
+                   f"AWS: {self.checked_bundles['aws']}/{self.primary_bundle_count}"
+                   f" GCP: {self.checked_bundles['gcp']}/{self.primary_bundle_count}", V_SUMMARY | V_TTY_ONLY)
 
         def print_results(self):
             self._print_results_for_replica('aws')
@@ -547,7 +550,7 @@ class AnalyzeSubmission:
                     if i == 0 and verbosity_level >= V_BAD_DETAIL or i >= 1 and verbosity_level >= V_GOOD_DETAIL:
                         for pri in sorted(pri_sec.keys()):
                             bundle_fqid = self.state.bundle_map[pri].get('fqid', pri)
-                            print(f"\t\tprimary: {bundle_fqid} secondary: {pri_sec[pri]}")
+                            print(f"\t    primary: {bundle_fqid} secondary: {pri_sec[pri]}")
 
                 for key in pri_sec.keys():
                     del replica_results[key]
@@ -564,13 +567,13 @@ class AnalyzeSubmission:
             self.primary_bundle_count = self.state.primary_bundle_count
 
         def check(self):
-            output("\tCounting bundles in webservice...", V_SUMMARY)
+            output("\tCounting bundles in webservice...", V_SUMMARY | V_TTY_ONLY)
             agent = AzulAgent(self.deployment)
             project_bundle_fqids = agent.get_project_bundle_fqids(self.state.project_uuid)
             for primary_bundle_uuid, bundle_info in self.state.iter_bundles('primary'):
                 present_in_azul = primary_bundle_uuid in [fqid.split('.')[0] for fqid in project_bundle_fqids]
                 bundle_info['present_in_azul'] = present_in_azul
-            output("done.\n", V_SUMMARY)
+            output("done.\n", V_SUMMARY | V_TTY_ONLY)
 
         def print_results(self):
             primary_bundles_indexed_by_project = {
@@ -583,7 +586,7 @@ class AnalyzeSubmission:
             if verbosity_level >= V_GOOD_DETAIL:
                 for bundle_uuid in sorted(primary_bundles_indexed_by_project.keys()):
                     bundle_info = primary_bundles_indexed_by_project[bundle_uuid]
-                    print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
+                    print(f"\t    {bundle_info.get('fqid', bundle_uuid)}")
 
             if len(primary_bundles_not_indexed_by_project) > 0:
                 output(f"\tIn Azul, {len(primary_bundles_not_indexed_by_project)} primary bundles are NOT indexed\n",
@@ -591,7 +594,7 @@ class AnalyzeSubmission:
                 if verbosity_level >= V_BAD_DETAIL:
                     for bundle_uuid in sorted(primary_bundles_not_indexed_by_project.keys()):
                         bundle_info = primary_bundles_indexed_by_project[bundle_uuid]
-                        print(f"\t{bundle_info.get('fqid', bundle_uuid)}")
+                        print(f"\t    {bundle_info.get('fqid', bundle_uuid)}")
 
     class SearchAzulForSecondaryBundles:
 
@@ -605,7 +608,7 @@ class AnalyzeSubmission:
                                                        if len(v.get('azul_result_bundles', [])) > 0])
 
         def check(self):
-            output("\tCounting secondary bundles in webservice...", V_SUMMARY)
+            output("\tCounting secondary bundles in webservice...", V_SUMMARY | V_TTY_ONLY)
             agent = AzulAgent(self.deployment)
             project_bundle_fqids = agent.get_project_bundle_fqids(self.state.project_uuid)
             for primary_bundle_uuid, primary_bundle_state in self.state.iter_bundles('primary'):
@@ -615,12 +618,11 @@ class AnalyzeSubmission:
                         primary_bundle_state['azul_result_bundles'].append(fqid)
                         self.azul_result_bundle_group_count += 1
                         self._print_progress()
-            output("done.\n", V_SUMMARY)
+            output("done.\n", V_SUMMARY | V_TTY_ONLY)
 
         def _print_progress(self):
-            if sys.stdout.isatty():
-                output(f"\r\tSearching for secondary bundles: "
-                       f"{self.azul_result_bundle_group_count}/{self.primary_bundle_count}", V_SUMMARY)
+            output(f"\r\tSearching for secondary bundles: "
+                   f"{self.azul_result_bundle_group_count}/{self.primary_bundle_count}", V_SUMMARY | V_TTY_ONLY)
 
         def print_results(self):
             azul_result_bundles = {k: v['azul_result_bundles'] for (k, v) in self.state.iter_bundles('primary')}
@@ -634,7 +636,7 @@ class AnalyzeSubmission:
                     if i == 0 and verbosity_level >= V_BAD_DETAIL or i >= 1 and verbosity_level >= V_GOOD_DETAIL:
                         for pri in sorted(pri_sec.keys()):
                             bundle_fqid = self.state.bundle_map[pri].get('fqid', pri)
-                            print(f"\t\tprimary: {bundle_fqid} secondary: {pri_sec[pri]}")
+                            print(f"\t    primary: {bundle_fqid} secondary: {pri_sec[pri]}")
 
                 for key in pri_sec.keys():
                     del azul_result_bundles[key]

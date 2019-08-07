@@ -70,6 +70,7 @@ class DbFile(DbBase, EntityBase):
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
 
     upload_area = relationship("DbUploadArea", back_populates="files")
+    validation_files = relationship("DbValidationFiles", back_populates="file")
 
     def __str__(self, prefix="", verbose=False):
         output = colored(f"{prefix}File {self.id}: {self.s3_key} with etag={self.s3_etag}\n", 'green') + \
@@ -99,7 +100,8 @@ class DbFile(DbBase, EntityBase):
                     checksum.print(prefix=prefix, verbose=verbose,
                                    associated_entities_to_show=associated_entities_to_show)
             if 'validations' in associated_entities_to_show or 'all' in associated_entities_to_show:
-                for val in self.validations:
+                for join_table_row in self.validation_files:
+                    val = join_table_row.validation
                     val.print(prefix=prefix, verbose=verbose,
                               associated_entities_to_show=associated_entities_to_show)
             if 'notifications' in associated_entities_to_show or 'all' in associated_entities_to_show:
@@ -164,7 +166,6 @@ class DbNotification(DbBase, EntityBase):
 class DbValidation(DbBase, EntityBase):
     __tablename__ = 'validation'
     id = Column(String(), primary_key=True)
-    file_id = Column(String(), ForeignKey('file.id'), nullable=False)
     job_id = Column(String(), nullable=False)
     status = Column(String(), nullable=False)
     results = Column(String(), nullable=False)
@@ -173,11 +174,10 @@ class DbValidation(DbBase, EntityBase):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
 
-    file = relationship("DbFile", back_populates='validations')
+    validation_files = relationship("DbValidationFiles", back_populates="validation")
 
     def __str__(self, prefix="", verbose=False):
         output = colored(f"{prefix}Validation {self.id}\n", 'yellow') + \
-                 f"{prefix}                  File ID: {self.file_id}\n" \
                  f"{prefix}                   Job ID: {self.job_id}\n" \
                  f"{prefix}                   Status: {self.status}\n" \
                  f"{prefix}    validation_started_at: {self.validation_started_at}\n" \
@@ -191,10 +191,27 @@ class DbValidation(DbBase, EntityBase):
     def print(self, prefix="", verbose=False, associated_entities_to_show=None):
         print(self.__str__(prefix=prefix, verbose=verbose))
         if associated_entities_to_show:
-            prefix = f"\t{prefix}"
+            inner_prefix = f"\t{prefix}"
             if 'batch_jobs' in associated_entities_to_show or 'all' in associated_entities_to_show:
-                BatchJob.find_by_id(self.job_id).print(prefix=prefix, verbose=verbose,
-                                                       associated_entities_to_show=associated_entities_to_show)
+                try:
+                    BatchJob.find_by_id(self.job_id).print(prefix=inner_prefix,
+                                                           verbose=verbose,
+                                                           associated_entities_to_show=associated_entities_to_show)
+                except DcpDiagException as e:
+                    print(f"{prefix}    {str(e)}\n")
+                    # Batch doesn't keep records for a long time.  Proceed.
+
+
+class DbValidationFiles(DbBase):
+    __tablename__ = 'validation_files'
+    id = Column(String(), primary_key=True)
+    validation_id = Column(String(), ForeignKey('validation.id'), nullable=False)
+    file_id = Column(String(), ForeignKey('file.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False, onupdate=datetime.utcnow)
+
+    file = relationship("DbFile", back_populates='validation_files')
+    validation = relationship("DbValidation", back_populates='validation_files')
 
 
 class BatchJob(EntityBase):
@@ -205,7 +222,7 @@ class BatchJob(EntityBase):
         response = batch.describe_jobs(jobs=[job_id])
         assert 'jobs' in response
         if len(response['jobs']) == 0:
-            raise DcpDiagException(f"Sorry I couldn't find job \"{job_id}\"")
+            raise DcpDiagException(f"AWS does not have a record of batch job \"{job_id}\"")
         assert len(response['jobs']) == 1
         return cls(aws_job_data=response['jobs'][0])
 
@@ -306,5 +323,4 @@ class CloudWatchLog(EntityBase):
 
 DbUploadArea.files = relationship('DbFile', order_by=DbFile.id, back_populates='upload_area')
 DbFile.checksum_records = relationship('DbChecksum', order_by=DbChecksum.created_at, back_populates='file')
-DbFile.validations = relationship('DbValidation', order_by=DbValidation.created_at, back_populates='file')
 DbFile.notifications = relationship('DbNotification', order_by=DbNotification.created_at, back_populates='file')

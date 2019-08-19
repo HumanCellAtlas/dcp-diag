@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 install_requires = [line.rstrip() for line in open(os.path.join(os.path.dirname(__file__), "requirements.txt"))]
 
 setup(name='dcp-diag',
-      version='1.1.1',
+      version='1.2.0',
       description='Data Coordination Platform diagnostic library and tools.',
       url='https://github.com/HumanCellAtlas/dcp-diag',
       author='Sam Pierson',

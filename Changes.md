@@ -1,3 +1,8 @@
+# Changes for v1.2.0 (2019-08-19)
+Make AzulAgent handle 400 errors
+Switch to dcplib's IngestApiAgent and ingest_entities
+Fix file <-> validation relationship in entities
+
 # Changes for v1.1.1 (2019-05-15)
 analyze-submission: update elasticsearch primary bundle search
 

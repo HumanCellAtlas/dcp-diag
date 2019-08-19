@@ -10,8 +10,7 @@ class AzulAgent:
         else:
             self.azul_service_url = f'https://service.{deployment}.explore.data.humancellatlas.org'
 
-    def get_project_bundle_fqids(self, document_id):
-        page_size = 1000
+    def get_project_bundle_fqids(self, document_id, page_size=1000):
         bundle_fqids = set()
 
         filter_dict = urllib.parse.quote('{"file":{"projectId":{"is":["' + document_id + '"]}}}')
@@ -29,12 +28,16 @@ class AzulAgent:
                 bundle_fqids.update(f"{bundle['bundleUuid']}.{bundle['bundleVersion']}"
                                     for bundle in content['bundles'])
 
-            search_after = response_json['pagination']['search_after']
-            search_after_uid = response_json['pagination']['search_after_uid']
+            pagination = response_json.get('pagination')
+            if pagination is None:
+                break
+
+            search_after = pagination.get('search_after')
+            search_after_uid = pagination.get('search_after_uid')
 
             if search_after is None and search_after_uid is None:
                 break
-            else:
-                url = base_url + f'&size={page_size}&search_after={search_after}&search_after_uid={search_after_uid}'
+
+            url = base_url + f'&size={page_size}&search_after={search_after}&search_after_uid={search_after_uid}'
 
         return bundle_fqids

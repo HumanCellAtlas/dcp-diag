@@ -1,10 +1,11 @@
 import re
 import sys
 
-from dcp_diag.component_agents import IngestApiAgent
+from dcplib.component_agents import IngestApiAgent
+from dcplib.component_entities.ingest_entities import SubmissionEnvelope, Project
+
 from .finder import Finder
 
-from dcp_diag.component_entities.ingest_entities import SubmissionEnvelope, Project
 
 class IngestFinder:
 

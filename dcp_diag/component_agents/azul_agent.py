@@ -24,8 +24,7 @@ class AzulAgent:
             'filters': json.dumps(filters),
             'size': page_size
         }
-        base_url = self.azul_service_url + f'/repository/bundles'
-        url = base_url + f'&size={page_size}'
+        url = self.azul_service_url + f'/repository/bundles'
         page = 0
 
         while True:

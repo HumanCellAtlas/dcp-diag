@@ -195,33 +195,55 @@ project/projects
 ```
 or use `all`
 
-**Permisions**: you must provide the path to the GCP service account JSON key
-that has access to the Data Processing Pipeline Service's workflow execution engines, otherwise the analysis commands will return `No auth information provided, skip checking Secondary Analysis for workflows.` to you.
+**Permisions**: you must provide the path to the GCP service account
+JSON key that has access to the Data Processing Pipeline Service's
+workflow execution engines, otherwise the analysis commands will return
+`No auth information provided, skip checking Secondary Analysis for workflows.`
+to you.
 
 Examples:
 
-Given a analysis workflow UUID from the integration environment, show associated primary bundle(s) and project(s), in a compact style:
+Given a analysis workflow UUID from the integration environment, show
+associated primary bundle(s) and project(s), in a compact style:
 
 ```bash
 dcpdig @analysis workflow_uuid=<uuid> -d integration --credentials=<path/to/gcp/service/account/key.json> --show bundles,projects
 ```
 
-Given a analysis workflow UUID from the integration environment, show associated primary bundle(s) and project(s), in a verbose style:
+Given a analysis workflow UUID from the integration environment, show
+associated primary bundle(s) and project(s), in a verbose style:
 
 ```bash
 dcpdig @analysis workflow_uuid=<uuid> -d integration --credentials=<path/to/gcp/service/account/key.json> -v -s all
 ```
 
-Given a primary bundle UUID from the integration environment, show all of the workflows it triggered, with each workflow's associated primary bundle(s) and project(s), in a compact style:
+Given a primary bundle UUID from the integration environment, show all
+of the workflows it triggered, with each workflow's associated primary
+bundle(s) and project(s), in a compact style:
 
 ```bash
 dcpdig @analysis bundle_uuid=<uuid> -d integration --credentials=<path/to/gcp/service/account/key.json> --show bundles,projects
 ```
 
-Given a primary bundle UUID from the integration environment, show all of the workflows it triggered, with each workflow's associated primary bundle(s) and project(s), in a verbose style:
+Given a primary bundle UUID from the integration environment, show all
+of the workflows it triggered, with each workflow's associated primary
+bundle(s) and project(s), in a verbose style:
 
 ```bash
 dcpdig @analysis bundle_uuid=<uuid> -d integration --credentials=<path/to/gcp/service/account/key.json> -v -s all
 ```
 
 ## Contributing
+
+### Tests
+
+There are no tests.  This is an internal prototype.
+
+### Releasing a New Version
+
+You must have an ID on pypi.org and know your password.
+Use [SEMVER](https://semver.org/).
+
+```bash
+    make release_<major|minor|patch>
+```

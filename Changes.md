@@ -1,3 +1,6 @@
+# Changes for v1.3.0 (2019-09-04)
+Updated API call for retrieving all bundle fqids of a project
+
 # Changes for v1.2.0 (2019-08-19)
 Make AzulAgent handle 400 errors
 Switch to dcplib's IngestApiAgent and ingest_entities

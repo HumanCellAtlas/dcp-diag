@@ -2,7 +2,7 @@ boto3>=1.7.13
 cromwell-tools>=v1.1.0
 hca
 psycopg2-binary
-requests>=2.20.0
+requests>=2.32.4
 sqlalchemy
 termcolor
 dcplib >= 3.2.1, < 4
